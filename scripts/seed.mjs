@@ -37,6 +37,15 @@ for (const e of exams) {
   );
 }
 
+// Echte Angaben des Besitzers (Stand 13.11.2026). INSERT OR IGNORE: spätere Änderungen in der App bleiben erhalten.
+const settings = { birthDate: "2011-05-10", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "4", salary: "850", investMonthly: "350" };
+for (const [k, val] of Object.entries(settings)) lines.push(`INSERT OR IGNORE INTO settings (key, value) VALUES (${q(k)}, ${q(val)});`);
+// Pläne ohne Übungen: die kennt noch niemand. Sonntag ist wackelig, steht aber im Plan.
+lines.push(`INSERT OR IGNORE INTO gym_plans (id, name, weekdays, sort_order) VALUES ('p-oberkoerper', 'Oberkörper', '1,3', 0);`);
+lines.push(`INSERT OR IGNORE INTO gym_plans (id, name, weekdays, sort_order) VALUES ('p-unterkoerper', 'Unterkörper', '0,5', 1);`);
+// Konten ohne Saldo
+["ZKB", "Yuh", "Revolut"].forEach((n, i) => lines.push(`INSERT OR IGNORE INTO accounts (id, name, bank, opening_balance, sort_order) VALUES (${q("a-" + n.toLowerCase())}, ${q(n)}, ${q(n)}, 0, ${i});`));
+
 const dir = mkdtempSync(join(tmpdir(), "seed-"));
 const file = join(dir, "seed.sql");
 writeFileSync(file, lines.join("\n") + "\n");

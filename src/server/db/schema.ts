@@ -276,3 +276,16 @@ export const healthDaily = sqliteTable("health_daily", {
   source: text("source").notNull().default("manual"),
   ...timestamps,
 });
+
+export const investmentEntries = sqliteTable(
+  "investment_entries",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind", { enum: ["value", "deposit"] }).notNull(),
+    date: text("date").notNull(),
+    amount: real("amount").notNull(),
+    note: text("note"),
+    ...timestamps,
+  },
+  (t) => [index("investment_entries_date_idx").on(t.date), check("investment_entries_kind_chk", sql`${t.kind} in ('value','deposit')`)],
+);

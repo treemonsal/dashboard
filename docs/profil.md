@@ -16,9 +16,10 @@ Stand 14.11.2026. Diese Datei zuerst lesen, bevor etwas geplant oder gefragt wir
 - Sonntag Unterkörper, klappt bisher etwa jede zweite Woche. Ziel: jede Woche, also 4 Trainings pro Woche.
 
 ## Geld
-- Lohn 850 pro Monat (Tim sagte "Pfund", gemeint sind fast sicher Franken, noch bestätigen lassen).
+- Lohn 650 Franken pro Monat.
 - 350 pro Monat gehen fix in den S&P 500. Das Depot soll im Bereich Geld sichtbar sein: Wert, Einzahlungen, Gewinn.
-- Frei verfügbar also 500 pro Monat.
+- Frei verfügbar also 300 pro Monat.
+- Mahlzeiten auswärts (Mittag- oder Abendessen, keine Snacks): die Mutter zahlt die Hälfte per Twint zurück. Diese Eingänge sind keine Einnahme, sondern werden mit den Mahlzeiten verrechnet. Die App zeigt, was noch offen ist.
 
 ## Ziele
 - Gym: ästhetischen Körper aufbauen. Wichtig ist Konstanz, sichtbar als Raster (Tag im Gym = weiss, sonst dunkel).

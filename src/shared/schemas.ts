@@ -149,6 +149,9 @@ export const settingsUpdate = z
     workDays: weekdayList,
     schoolDays: weekdayList,
     gymGoal: z.string().regex(/^[1-7]$/),
+    salary: z.string().regex(/^\d{1,6}(\.\d{1,2})?$/),
+    investMonthly: z.string().regex(/^\d{1,6}(\.\d{1,2})?$/),
+    investStart: z.union([isoDate, z.literal("")]),
   })
   .partial()
   .strict();
@@ -159,8 +162,14 @@ export type Settings = {
   workDays: string;
   schoolDays: string;
   gymGoal: string;
+  /** Monatslohn in CHF */
+  salary: string;
+  /** Fixe Einzahlung pro Monat in den S&P 500 */
+  investMonthly: string;
+  /** Datum der ersten Einzahlung (leer = noch nicht eingetragen) */
+  investStart: string;
 };
-export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "3" };
+export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "4", salary: "850", investMonthly: "350", investStart: "" };
 
 /* ---------- Lernplan ---------- */
 export const studyPlanRequest = z.object({ replace: z.boolean().optional(), blockMin: z.number().int().min(10).max(240).optional() });
@@ -199,6 +208,16 @@ export const transactionCreate = z.object({
 export const transactionBulk = z.object({ transactions: z.array(transactionCreate).min(1).max(1000) });
 export const transactionUpdate = transactionCreate.omit({ id: true }).partial();
 export const transactionQuery = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/).optional(), limit: z.coerce.number().int().min(1).max(1000).default(200) });
+
+/* ---------- Depot ---------- */
+export const investmentEntryCreate = z.object({
+  id: id.optional(),
+  // value = Depotwert an einem Tag, deposit = einmalige Einzahlung (z.B. bisher eingezahlt)
+  kind: z.enum(["value", "deposit"]),
+  date: isoDate,
+  amount: z.number().min(0).max(1e9),
+  note: optText(200),
+});
 
 /* ---------- Körper ---------- */
 export const healthUpsert = z
@@ -440,4 +459,13 @@ export interface TaskEvent {
   doneTime: string;
   durationMin: number | null;
   plannedMin: number | null;
+}
+
+export type InvestmentEntryCreate = z.input<typeof investmentEntryCreate>;
+export interface InvestmentEntry {
+  id: string;
+  kind: "value" | "deposit";
+  date: string;
+  amount: number;
+  note: string | null;
 }

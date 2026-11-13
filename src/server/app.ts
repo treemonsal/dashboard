@@ -1,9 +1,8 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
 import { and, asc, desc, eq, getTableColumns, gte, isNull, lte, or, sql, type SQL } from "drizzle-orm";
-import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
+import { drizzle } from "drizzle-orm/d1";
 import * as schema from "./db/schema";
-import { checkAccess, type AuthEnv } from "./auth";
+import { checkAccess } from "./auth";
 import {
   examCreate,
   examTopicCreate,
@@ -20,7 +19,6 @@ import {
   habitLogUpdate,
   habitLogUpsert,
   habitUpdate,
-  id as idSchema,
   isoDate,
   projectCreate,
   projectUpdate,
