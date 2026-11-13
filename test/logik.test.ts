@@ -83,3 +83,49 @@ describe("Lernblöcke", () => {
     expect(new Set(b.map((x) => x.date)).size).toBeLessThanOrEqual(2);
   });
 });
+
+import { budgetOf, byCategory, depositTotal, mamaBalance, monthSummary } from "../src/shared/geld";
+
+const tx = (id: string, date: string, amount: number, o: Record<string, unknown> = {}) => ({ id, date, amount, mealOut: false, isRepayment: false, settledAt: null, categoryId: null, ...o });
+
+describe("Geld", () => {
+  it("rechnet das Budget aus Lohn und Einzahlung", () => {
+    expect(budgetOf("650", "350")).toBe(300);
+    expect(budgetOf("100", "350")).toBe(0);
+  });
+  it("Übrig zählt bei Mahlzeiten nur die Hälfte und ignoriert Rückzahlungen und Einnahmen", () => {
+    const list = [tx("a", "2026-11-02", -20, { mealOut: true }), tx("b", "2026-11-03", -10), tx("c", "2026-11-05", 10, { isRepayment: true }), tx("d", "2026-11-06", 100)];
+    const s = monthSummary(list, 300);
+    expect(s.spent).toBe(20);
+    expect(s.left).toBe(280);
+    expect(s.income).toBe(100);
+    expect(monthSummary([], 300).hasData).toBe(false);
+  });
+  it("Kategorien mit eigenem Anteil, grösste zuerst", () => {
+    const r = byCategory([tx("a", "2026-11-02", -20, { mealOut: true, categoryId: "e" }), tx("b", "2026-11-03", -15, { categoryId: "s" }), tx("c", "2026-11-04", -4, { categoryId: "e" })]);
+    expect(r).toEqual([{ categoryId: "s", amount: 15 }, { categoryId: "e", amount: 14 }]);
+  });
+  it("Offen von Mama: 50 Prozent, Zahlungen werden der Reihe nach verrechnet", () => {
+    const list = [
+      tx("m1", "2026-11-02", -16, { mealOut: true }),
+      tx("m2", "2026-11-04", -20, { mealOut: true }),
+      tx("m3", "2026-11-06", -12, { mealOut: true }),
+      tx("s", "2026-11-06", -3), // Snack, keine Mahlzeit
+      tx("p", "2026-11-07", 12, { isRepayment: true }),
+    ];
+    const b = mamaBalance(list);
+    expect(b.open).toBe(12); // erwartet 8 + 10 + 6 = 24, bezahlt 12
+    expect(b.meals.map((m) => m.status)).toEqual(["settled", "partial", "open"]);
+    expect(b.meals[1].covered).toBe(4);
+  });
+  it("Von Hand beglichene Mahlzeiten zählen nicht als offen und verbrauchen keine Zahlung", () => {
+    const list = [tx("m1", "2026-11-02", -16, { mealOut: true, settledAt: "2026-11-03T10:00:00Z" }), tx("m2", "2026-11-04", -20, { mealOut: true }), tx("p", "2026-11-07", 5, { isRepayment: true })];
+    const b = mamaBalance(list);
+    expect(b.open).toBe(5);
+    expect(b.meals[0].status).toBe("settled");
+  });
+  it("Einzahlungen im Depot", () => {
+    expect(depositTotal({ monthly: 350, start: "2026-09-15", today: "2026-11-13", extra: 100 })).toBe(1150);
+    expect(depositTotal({ monthly: 350, start: "", today: "2026-11-13", extra: 100 })).toBe(100);
+  });
+});

@@ -73,6 +73,19 @@ function writePlan(planId: string, b: z.infer<typeof gymPlanWrite>, sortOrder?: 
   return { exercises, weekdays: [...new Set(b.weekdays)].sort((a, c) => a - c).join(","), sortOrder };
 }
 
+const toTx = (r: typeof t.transactions.$inferSelect) => ({
+  id: r.id, accountId: r.accountId, categoryId: r.categoryId, date: r.date, amount: r.amount, description: r.description,
+  mealOut: r.mealOut, isRepayment: r.isRepayment, settledAt: r.settledAt,
+});
+
+/** Kategorie "Essen auswärts" setzt "Mahlzeit auswärts" standardmässig, alles andere (auch Snack) nicht. */
+async function mealDefault(db: Db, categoryId: string | null | undefined, explicit: boolean | undefined): Promise<boolean> {
+  if (explicit !== undefined) return explicit;
+  if (!categoryId) return false;
+  const c = await db.select({ name: t.categories.name }).from(t.categories).where(eq(t.categories.id, categoryId)).get();
+  return c?.name === "Essen auswärts";
+}
+
 export function registerExtra(api: Hono<AppEnv>) {
   /* ---------- Einstellungen ---------- */
   api.get("/settings", async (c) => {
@@ -298,23 +311,28 @@ export function registerExtra(api: Hono<AppEnv>) {
       .where(month ? like(t.transactions.date, `${month}-%`) : undefined)
       .orderBy(desc(t.transactions.date), desc(t.transactions.createdAt))
       .limit(limit);
-    return c.json(rows.map(({ id, accountId, categoryId, date, amount, description }) => ({ id, accountId, categoryId, date, amount, description })));
+    return c.json(rows.map(toTx));
   });
   api.post("/transactions", v("json", transactionCreate), async (c) => {
     const b = c.req.valid("json");
-    const row = await c.var.db.insert(t.transactions).values({ ...b, id: b.id ?? newId() }).returning().get();
-    return c.json(row, 201);
+    const mealOut = await mealDefault(c.var.db, b.categoryId, b.mealOut);
+    const row = await c.var.db.insert(t.transactions).values({ ...b, mealOut, id: b.id ?? newId() }).returning().get();
+    return c.json(toTx(row), 201);
   });
   api.post("/transactions/bulk", v("json", transactionBulk), async (c) => {
     const db = c.var.db;
-    const rows = c.req.valid("json").transactions.map((x) => ({ ...x, id: x.id ?? newId() }));
+    const rows = [];
+    for (const x of c.req.valid("json").transactions) rows.push({ ...x, id: x.id ?? newId(), mealOut: await mealDefault(db, x.categoryId, x.mealOut) });
     // D1 erlaubt wenige Parameter pro Anweisung: in kleinen Gruppen einfügen.
-    for (let i = 0; i < rows.length; i += 10) await db.insert(t.transactions).values(rows.slice(i, i + 10));
+    for (let i = 0; i < rows.length; i += 5) await db.insert(t.transactions).values(rows.slice(i, i + 5));
     return c.json({ inserted: rows.length }, 201);
   });
   api.patch("/transactions/:id", v("param", idParam), v("json", transactionUpdate), async (c) => {
-    const row = await c.var.db.update(t.transactions).set({ ...c.req.valid("json"), updatedAt: nowIso() }).where(eq(t.transactions.id, c.req.valid("param").id)).returning().get();
-    return row ? c.json(row) : notFound(c);
+    const { settled, ...rest } = c.req.valid("json");
+    const set: Partial<typeof t.transactions.$inferInsert> = { ...rest, updatedAt: nowIso() };
+    if (settled !== undefined) set.settledAt = settled ? nowIso() : null;
+    const row = await c.var.db.update(t.transactions).set(set).where(eq(t.transactions.id, c.req.valid("param").id)).returning().get();
+    return row ? c.json(toTx(row)) : notFound(c);
   });
   api.delete("/transactions/:id", v("param", idParam), async (c) => {
     const row = await c.var.db.delete(t.transactions).where(eq(t.transactions.id, c.req.valid("param").id)).returning({ id: t.transactions.id }).get();

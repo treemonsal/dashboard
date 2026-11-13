@@ -152,6 +152,7 @@ export const settingsUpdate = z
     salary: z.string().regex(/^\d{1,6}(\.\d{1,2})?$/),
     investMonthly: z.string().regex(/^\d{1,6}(\.\d{1,2})?$/),
     investStart: z.union([isoDate, z.literal("")]),
+    mamaName: z.string().trim().max(60),
   })
   .partial()
   .strict();
@@ -168,8 +169,10 @@ export type Settings = {
   investMonthly: string;
   /** Datum der ersten Einzahlung (leer = noch nicht eingetragen) */
   investStart: string;
+  /** Wer die Hälfte der Mahlzeiten auswärts zurückzahlt (leer, bis eingetragen) */
+  mamaName: string;
 };
-export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "4", salary: "850", investMonthly: "350", investStart: "" };
+export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "4", salary: "650", investMonthly: "350", investStart: "", mamaName: "" };
 
 /* ---------- Lernplan ---------- */
 export const studyPlanRequest = z.object({ replace: z.boolean().optional(), blockMin: z.number().int().min(10).max(240).optional() });
@@ -204,9 +207,11 @@ export const transactionCreate = z.object({
   date: isoDate,
   amount: z.number().min(-1e9).max(1e9),
   description: optText(300),
+  mealOut: z.boolean().optional(),
+  isRepayment: z.boolean().optional(),
 });
 export const transactionBulk = z.object({ transactions: z.array(transactionCreate).min(1).max(1000) });
-export const transactionUpdate = transactionCreate.omit({ id: true }).partial();
+export const transactionUpdate = transactionCreate.omit({ id: true }).partial().extend({ settled: z.boolean().optional() });
 export const transactionQuery = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/).optional(), limit: z.coerce.number().int().min(1).max(1000).default(200) });
 
 /* ---------- Depot ---------- */
@@ -438,6 +443,9 @@ export interface Transaction {
   date: string;
   amount: number;
   description: string | null;
+  mealOut: boolean;
+  isRepayment: boolean;
+  settledAt: string | null;
 }
 
 export interface HealthDay {

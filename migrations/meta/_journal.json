@@ -15,6 +15,13 @@
       "when": 1794611470525,
       "tag": "0001_ebene2",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794611713124,
+      "tag": "0002_mahlzeit",
+      "breakpoints": true
     }
   ]
 }

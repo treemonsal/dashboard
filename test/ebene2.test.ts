@@ -17,6 +17,8 @@ describe("Einstellungen", () => {
     const a = await call<Record<string, string>>("GET", "/api/settings");
     expect(a.data.wakeTime).toBe("06:30");
     expect(a.data.gymGoal).toBe("4");
+    expect(a.data.salary).toBe("650");
+    expect(a.data.mamaName).toBe("");
     const b = await call<Record<string, string>>("PUT", "/api/settings", { birthDate: "2011-05-10", schoolDays: "4,5" });
     expect(b.data.birthDate).toBe("2011-05-10");
     expect((await call("PUT", "/api/settings", { wakeTime: "6 Uhr" })).status).toBe(400);
@@ -108,6 +110,8 @@ describe("Geld", () => {
     const a = await call<Account>("POST", "/api/accounts", { id: "acc1", name: "ZKB", openingBalance: 100 });
     expect(a.status).toBe(201);
     await call("POST", "/api/categories", { id: "cat1", name: "Essen" });
+    await call("POST", "/api/categories", { id: "cat-snack", name: "Snack" });
+    await call("POST", "/api/categories", { id: "cat-ea", name: "Essen auswärts" });
     const bulk = await call("POST", "/api/transactions/bulk", {
       transactions: [
         { accountId: "acc1", categoryId: "cat1", date: "2026-11-02", amount: -12.5, description: "Migros" },
@@ -117,8 +121,17 @@ describe("Geld", () => {
     expect(bulk.status).toBe(201);
     const accs = await call<Account[]>("GET", "/api/accounts");
     expect(accs.data.find((x) => x.id === "acc1")!.balance).toBe(937.5);
+    const meal = await call<Transaction>("POST", "/api/transactions", { accountId: "acc1", categoryId: "cat-ea", date: "2026-11-03", amount: -18 });
+    expect(meal.data.mealOut).toBe(true);
+    const snack = await call<Transaction>("POST", "/api/transactions", { accountId: "acc1", categoryId: "cat-snack", date: "2026-11-03", amount: -3 });
+    expect(snack.data.mealOut).toBe(false);
+    const toggled = await call<Transaction>("PATCH", `/api/transactions/${snack.data.id}`, { mealOut: true });
+    expect(toggled.data.mealOut).toBe(true);
+    const settled = await call<Transaction>("PATCH", `/api/transactions/${meal.data.id}`, { settled: true });
+    expect(settled.data.settledAt).not.toBeNull();
+    expect((await call<Transaction>("PATCH", `/api/transactions/${meal.data.id}`, { settled: false })).data.settledAt).toBeNull();
     const nov = await call<Transaction[]>("GET", "/api/transactions?month=2026-11");
-    expect(nov.data).toHaveLength(1);
+    expect(nov.data).toHaveLength(3);
     expect((await call("POST", "/api/transactions", { accountId: "gibt-es-nicht", date: "2026-11-02", amount: 1 })).status).toBe(400);
     expect((await call("POST", "/api/transactions", { accountId: "acc1", date: "2026-11-02", amount: "x" })).status).toBe(400);
   });

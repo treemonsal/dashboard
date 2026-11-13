@@ -20,7 +20,6 @@
     "@hono/zod-validator": "^0.9.1",
     "@tanstack/react-query": "^5.107.1",
     "drizzle-orm": "^0.45.4",
-    "geist": "^1.9.2",
     "hono": "^4.13.18",
     "jose": "^6.2.17",
     "motion": "^14.14.0",

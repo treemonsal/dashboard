@@ -261,6 +261,12 @@ export const transactions = sqliteTable(
     // Negativ = Ausgabe, positiv = Einnahme
     amount: real("amount").notNull(),
     description: text("description"),
+    // Mahlzeit auswärts (Mittag-/Abendessen): die Mutter zahlt die Hälfte zurück
+    mealOut: integer("meal_out", { mode: "boolean" }).notNull().default(false),
+    // Eingehende Rückzahlung der Mutter: keine Einnahme, wird gegen offene Mahlzeiten verrechnet
+    isRepayment: integer("is_repayment", { mode: "boolean" }).notNull().default(false),
+    // Von Hand als beglichen markiert
+    settledAt: text("settled_at"),
     ...timestamps,
   },
   (t) => [index("transactions_date_idx").on(t.date), index("transactions_account_idx").on(t.accountId), index("transactions_category_idx").on(t.categoryId)],
