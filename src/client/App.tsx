@@ -1,51 +1,52 @@
-import { Aufgaben, Heute, Leer, Pruefung, Schule } from "./pages";
+import { SheetProvider } from "./sheet";
+import { Toast } from "./toast";
 import { Link, usePath } from "./router";
+import { Icon } from "./ui";
+import { Aufgaben, Heute, Ziele } from "./pages-heute";
+import { Analyse, Einstellungen, Geld, Koerper, Plaene, Zeit } from "./pages-rest";
 
 const TABS = [
-  { href: "/", label: "Heute" },
-  { href: "/aufgaben", label: "Aufgaben" },
-  { href: "/kalender", label: "Kalender" },
-  { href: "/schule", label: "Schule" },
-  { href: "/finanzen", label: "Finanzen" },
-  { href: "/gesundheit", label: "Gesundheit" },
+  { href: "/", label: "Heute", icon: "heute" },
+  { href: "/aufgaben", label: "Aufgaben", icon: "aufgaben" },
+  { href: "/ziele", label: "Ziele", icon: "ziele" },
+  { href: "/geld", label: "Geld", icon: "geld" },
+  { href: "/koerper", label: "Körper", icon: "koerper" },
 ];
+// Unterseiten gehören zu einem Tab
+const PARENT: Record<string, string> = { "/plaene": "/ziele", "/analyse": "/geld", "/zeit": "/", "/einstellungen": "/" };
 
 function View({ path }: { path: string }) {
-  const exam = /^\/schule\/pruefungen\/([A-Za-z0-9_-]+)$/.exec(path);
-  if (exam) return <Pruefung key={exam[1]} id={exam[1]} />;
   switch (path) {
-    case "/":
-      return <Heute />;
-    case "/aufgaben":
-      return <Aufgaben />;
-    case "/schule":
-      return <Schule />;
-    case "/kalender":
-      return <Leer title="Kalender" text="Die Verbindung mit Google Kalender folgt in Stufe 1." />;
-    case "/finanzen":
-      return <Leer title="Finanzen" text="Hier erscheinen die Monatsübersichten, sobald die Bank-Exporte eingelesen werden können." />;
-    case "/gesundheit":
-      return <Leer title="Gesundheit" text="Schlaf, Schritte und Ruhepuls erscheinen hier, sobald Google Health verbunden ist." />;
-    default:
-      return <Leer title="Nicht gefunden" text="Diese Seite gibt es nicht." />;
+    case "/": return <Heute />;
+    case "/aufgaben": return <Aufgaben />;
+    case "/ziele": return <Ziele />;
+    case "/geld": return <Geld />;
+    case "/koerper": return <Koerper />;
+    case "/plaene": return <Plaene />;
+    case "/analyse": return <Analyse />;
+    case "/zeit": return <Zeit />;
+    case "/einstellungen": return <Einstellungen />;
+    default: return <div className="view"><div className="card"><div className="empty">Diese Seite gibt es nicht.</div></div></div>;
   }
 }
 
 export function App() {
   const path = usePath();
-  const active = TABS.filter((t) => (t.href === "/" ? path === "/" : path.startsWith(t.href))).at(-1)?.href;
+  const active = PARENT[path] ?? path;
   return (
-    <>
-      <main className="shell">
+    <SheetProvider>
+      <main className="app">
         <View key={path} path={path} />
       </main>
-      <nav className="tabbar" aria-label="Bereiche">
+      <nav className="tabs" aria-label="Bereiche">
         {TABS.map((t) => (
-          <Link key={t.href} href={t.href} aria-current={t.href === active ? "page" : undefined}>
-            {t.label}
+          <Link key={t.href} href={t.href} className="press-tab" aria-current={t.href === active ? "page" : undefined}>
+            <Icon n={t.icon} />
+            <span>{t.label}</span>
           </Link>
         ))}
       </nav>
-    </>
+      <Toast />
+    </SheetProvider>
   );
 }

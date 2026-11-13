@@ -42,8 +42,8 @@ export function byCategory(txs: Tx[]): { categoryId: string | null; amount: numb
   return [...m].map(([categoryId, amount]) => ({ categoryId, amount: r2(amount) })).sort((a, b) => b.amount - a.amount);
 }
 
-export interface MealState {
-  tx: Tx;
+export interface MealState<T extends Tx = Tx> {
+  tx: T;
   /** Erwartete Rückzahlung: 50 Prozent */
   expected: number;
   /** Davon durch eingegangene Zahlungen gedeckt */
@@ -55,11 +55,11 @@ export interface MealState {
  * Offene Rückzahlungen. Eingehende Zahlungen der Mutter (isRepayment) werden der Reihe nach
  * (älteste Mahlzeit zuerst) gegen die nicht von Hand beglichenen Mahlzeiten verrechnet.
  */
-export function mamaBalance(txs: Tx[]): { open: number; meals: MealState[] } {
+export function mamaBalance<T extends Tx>(txs: T[]): { open: number; meals: MealState<T>[] } {
   const meals = txs.filter((t) => t.mealOut && t.amount < 0 && !t.isRepayment).sort((a, b) => (a.date === b.date ? a.id.localeCompare(b.id) : a.date.localeCompare(b.date)));
   let pool = txs.filter((t) => t.isRepayment && t.amount > 0).reduce((s, t) => s + t.amount, 0);
   let open = 0;
-  const out: MealState[] = meals.map((tx) => {
+  const out: MealState<T>[] = meals.map((tx) => {
     const expected = r2(-tx.amount / 2);
     if (tx.settledAt) return { tx, expected, covered: expected, status: "settled" as const };
     const covered = r2(Math.min(pool, expected));

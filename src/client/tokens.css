@@ -21,7 +21,7 @@
   --pop: cubic-bezier(0.3, 1.8, 0.5, 1);
 
   /* Radien */
-  --r-card: 24px;
+  --r-card: 28px;
   --r-tile: 22px;
   --r-sheet: 28px;
   --r-chip: 14px;
@@ -31,7 +31,7 @@
   /* Abstände */
   --gutter: 16px;
   --gap: 14px;
-  --tab-h: 44px;
+  --tab-h: 56px;
   --col: 430px;
 
   /* Schriftgrössen */

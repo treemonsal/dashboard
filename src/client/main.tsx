@@ -5,12 +5,12 @@ import { registerSW } from "virtual:pwa-register";
 import { App } from "./App";
 import "./styles.css";
 
-// Dunkel ist Standard. Hell nur auf ausdrücklichen Wunsch (localStorage "theme" = "light").
-try {
-  if (localStorage.getItem("theme") === "light") document.documentElement.dataset.theme = "light";
-} catch {
-  /* Speicher gesperrt: dunkel bleiben */
-}
+// Sofortige Rückmeldung beim Drücken: pointerdown setzt data-down (CSS: scale .97), nie erst beim Loslassen.
+const clearDown = () => document.querySelectorAll("[data-down]").forEach((el) => el.removeAttribute("data-down"));
+document.addEventListener("pointerdown", (e) => (e.target as Element | null)?.closest?.(".press, .press-tab")?.setAttribute("data-down", ""), { capture: true, passive: true });
+for (const ev of ["pointerup", "pointercancel", "lostpointercapture", "dragstart"]) document.addEventListener(ev, clearDown, { capture: true, passive: true });
+// iOS Safari: :active und Touch-Rückmeldung brauchen einen Touch-Listener am Dokument.
+document.addEventListener("touchstart", () => {}, { passive: true });
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: true } },

@@ -1,119 +1,265 @@
 // Datenzugriff mit sofortiger Reaktion: Änderungen erscheinen zuerst lokal und werden bei Fehlern zurückgerollt.
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { api } from "./api";
-import { todayInZone } from "../shared/dates";
-import type { Assessment, Exam, ExamDetail, ExamStatus, Task, TaskCreate } from "../shared/schemas";
+import { notify } from "./toast";
+import { addDays, mondayOf, todayInZone } from "../shared/dates";
+import { SETTING_DEFAULTS } from "../shared/settings";
+import type * as S from "../shared/schemas";
 
 export const keys = {
   tasks: ["tasks"] as const,
-  taskList: (view: "all" | "today") => ["tasks", view] as const,
+  projects: ["projects"] as const,
+  settings: ["settings"] as const,
+  subjects: ["subjects"] as const,
   exams: ["exams"] as const,
   exam: (id: string) => ["exam", id] as const,
   grades: ["grades"] as const,
-  syncRuns: (kind: string) => ["sync-runs", kind] as const,
+  plans: ["gym-plans"] as const,
+  gymDays: (from: string) => ["gym-days", from] as const,
+  gymDay: (day: string) => ["gym-day", day] as const,
+  gymHistory: ["gym-history"] as const,
+  accounts: ["accounts"] as const,
+  categories: ["categories"] as const,
+  tx: (m: string) => ["tx", m] as const,
+  invest: ["invest"] as const,
+  health: (from: string, to: string) => ["health", from, to] as const,
 };
 
-export const useTasks = (view: "all" | "today") => useQuery({ queryKey: keys.taskList(view), queryFn: () => api.tasks.list({ view }) });
+/** Aktuelle Zeit, minütlich aktualisiert (für Tag, Balken und Countdown). */
+export function useNow(): Date {
+  const [n, setN] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setN(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  return n;
+}
+export const useToday = () => todayInZone(useNow());
+
+/**
+ * Optimistische Änderung: `apply` verändert den Zwischenspeicher sofort, bei Fehler wird zurückgerollt
+ * und eine kurze Meldung gezeigt. Danach wird neu geladen.
+ */
+function useOpt<V, D>(o: { key: QueryKey | ((v: V) => QueryKey); fn: (v: V) => Promise<unknown>; apply?: (d: D, v: V) => D; also?: QueryKey[]; after?: (r: unknown, v: V) => void }) {
+  const qc = useQueryClient();
+  const keyOf = (v: V) => (typeof o.key === "function" ? o.key(v) : o.key);
+  return useMutation({
+    mutationFn: o.fn,
+    onMutate: async (v: V) => {
+      const key = keyOf(v);
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<D>(key);
+      if (o.apply && prev !== undefined) qc.setQueryData<D>(key, o.apply(prev, v));
+      return { prev, key };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx) qc.setQueryData(ctx.key, ctx.prev);
+      notify("Nicht gespeichert");
+    },
+    onSuccess: (r, v) => o.after?.(r, v),
+    onSettled: (_r, _e, v) => {
+      qc.invalidateQueries({ queryKey: keyOf(v) });
+      o.also?.forEach((k) => qc.invalidateQueries({ queryKey: k }));
+    },
+  });
+}
+
+/* ---------- Aufgaben ---------- */
+export const useTasks = () => useQuery({ queryKey: keys.tasks, queryFn: api.tasks.list });
+export const useProjects = () => useQuery({ queryKey: keys.projects, queryFn: api.projects.list });
+
+const mkTask = (b: S.TaskCreate & { id: string }): S.Task => {
+  const now = new Date().toISOString();
+  return {
+    id: b.id, title: b.title, notes: b.notes ?? null, projectId: b.projectId ?? null, parentId: b.parentId ?? null,
+    dueDate: b.dueDate ?? null, dueTime: b.dueTime ?? null, priority: b.priority ?? 4, recurrence: b.recurrence ?? null,
+    durationMin: b.durationMin ?? null, examId: b.examId ?? null, doneAt: null, sortOrder: b.sortOrder ?? 0, createdAt: now, updatedAt: now,
+  };
+};
+
+export function useCreateTask() {
+  return useOpt<S.TaskCreate & { id: string }, S.Task[]>({ key: keys.tasks, fn: (b) => api.tasks.create(b), apply: (d, b) => [...d, mkTask(b)] });
+}
+export function useUpdateTask() {
+  return useOpt<{ id: string; patch: S.TaskUpdate }, S.Task[]>({
+    key: keys.tasks,
+    fn: ({ id, patch }) => api.tasks.update(id, patch),
+    apply: (d, { id, patch }) =>
+      d.map((t) => {
+        if (t.id !== id) return t;
+        const { done, actualMin: _a, ...rest } = patch;
+        const next = { ...t, ...rest } as S.Task;
+        if (done !== undefined) next.doneAt = done ? (t.doneAt ?? new Date().toISOString()) : null;
+        return next;
+      }),
+  });
+}
+export const useToggleTask = () => {
+  const u = useUpdateTask();
+  return { mutate: (id: string, done: boolean) => u.mutate({ id, patch: { done } }) };
+};
+export function useDeleteTask() {
+  return useOpt<string, S.Task[]>({ key: keys.tasks, fn: (id) => api.tasks.remove(id), apply: (d, id) => d.filter((t) => t.id !== id && t.parentId !== id) });
+}
+export function useCreateProject() {
+  return useOpt<{ id: string; name: string }, S.Project[]>({
+    key: keys.projects,
+    fn: (b) => api.projects.create(b),
+    apply: (d, b) => [...d, { id: b.id, name: b.name, sortOrder: d.length, archived: false, createdAt: "", updatedAt: "" }],
+  });
+}
+
+/* ---------- Einstellungen ---------- */
+export function useSettings(): S.Settings {
+  const q = useQuery({ queryKey: keys.settings, queryFn: api.settings.get });
+  return q.data ?? SETTING_DEFAULTS;
+}
+export function useSetSetting() {
+  const m = useOpt<S.SettingsUpdate, S.Settings>({ key: keys.settings, fn: (b) => api.settings.put(b), apply: (d, b) => ({ ...d, ...b }) as S.Settings });
+  return (b: S.SettingsUpdate) => m.mutate(b);
+}
+
+/* ---------- Schule ---------- */
+export const useSubjects = () => useQuery({ queryKey: keys.subjects, queryFn: api.subjects.list });
 export const useExams = () => useQuery({ queryKey: keys.exams, queryFn: () => api.exams.list(todayInZone()) });
 export const useExam = (id: string) => useQuery({ queryKey: keys.exam(id), queryFn: () => api.exams.get(id) });
 export const useGrades = () => useQuery({ queryKey: keys.grades, queryFn: api.grades.list });
-export const useLastSync = (kind: string) => useQuery({ queryKey: keys.syncRuns(kind), queryFn: () => api.syncRuns.list(kind) });
-
-type Snapshot = [QueryKey, unknown][];
-
-function restore(qc: ReturnType<typeof useQueryClient>, snap: Snapshot | undefined) {
-  snap?.forEach(([k, d]) => qc.setQueryData(k, d));
-}
-
-export function useToggleTask() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, done }: { id: string; done: boolean }) => api.tasks.update(id, { done }),
-    onMutate: async ({ id, done }) => {
-      await qc.cancelQueries({ queryKey: keys.tasks });
-      const snap = qc.getQueriesData({ queryKey: keys.tasks });
-      qc.setQueriesData<Task[]>({ queryKey: keys.tasks }, (list) =>
-        list?.map((t) => (t.id === id ? { ...t, doneAt: done ? (t.doneAt ?? new Date().toISOString()) : null } : t)),
-      );
-      return { snap };
-    },
-    onError: (_e, _v, ctx) => restore(qc, ctx?.snap),
-    // Kein sofortiges Neuladen: erledigte Aufgaben bleiben bis zum nächsten Abruf durchgestrichen stehen.
-    onSuccess: (task) => qc.setQueriesData<Task[]>({ queryKey: keys.tasks }, (list) => list?.map((t) => (t.id === task.id ? task : t))),
-  });
-}
-
-export function useCreateTask() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (b: TaskCreate & { id: string }) => api.tasks.create(b),
-    onMutate: async (b) => {
-      await qc.cancelQueries({ queryKey: keys.tasks });
-      const snap = qc.getQueriesData({ queryKey: keys.tasks });
-      const now = new Date().toISOString();
-      const optimistic: Task = {
-        id: b.id,
-        title: b.title,
-        notes: b.notes ?? null,
-        projectId: b.projectId ?? null,
-        parentId: b.parentId ?? null,
-        dueDate: b.dueDate ?? null,
-        dueTime: b.dueTime ?? null,
-        priority: b.priority ?? 4,
-        recurrence: b.recurrence ?? null,
-        durationMin: b.durationMin ?? null,
-        examId: b.examId ?? null,
-        doneAt: null,
-        sortOrder: b.sortOrder ?? 0,
-        createdAt: now,
-        updatedAt: now,
-      };
-      qc.setQueryData<Task[]>(keys.taskList("all"), (l) => (l ? [...l, optimistic] : l));
-      if (optimistic.dueDate && optimistic.dueDate <= todayInZone()) {
-        qc.setQueryData<Task[]>(keys.taskList("today"), (l) => (l ? [...l, optimistic] : l));
-      }
-      return { snap };
-    },
-    onError: (_e, _v, ctx) => restore(qc, ctx?.snap),
-    onSettled: () => qc.invalidateQueries({ queryKey: keys.tasks }),
-  });
-}
 
 export function useSetAssessment(examId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ topicId, assessment }: { topicId: string; assessment: Assessment }) => api.topics.update(topicId, { assessment }),
-    onMutate: async ({ topicId, assessment }) => {
-      await qc.cancelQueries({ queryKey: keys.exam(examId) });
-      const prev = qc.getQueryData<ExamDetail>(keys.exam(examId));
-      if (prev) {
-        const topics = prev.topics.map((t) => (t.id === topicId ? { ...t, assessment } : t));
-        qc.setQueryData<ExamDetail>(keys.exam(examId), { ...prev, topics, topicsSolid: topics.filter((t) => t.assessment === 2).length });
-      }
-      return { prev };
+  return useOpt<{ topicId: string; assessment: S.Assessment }, S.ExamDetail>({
+    key: keys.exam(examId),
+    fn: ({ topicId, assessment }) => api.topics.update(topicId, { assessment }),
+    apply: (d, { topicId, assessment }) => {
+      const topics = d.topics.map((t) => (t.id === topicId ? { ...t, assessment } : t));
+      return { ...d, topics, topicsSolid: topics.filter((t) => t.assessment === 2).length };
     },
-    onError: (_e, _v, ctx) => ctx?.prev && qc.setQueryData(keys.exam(examId), ctx.prev),
-    onSettled: () => qc.invalidateQueries({ queryKey: keys.exams }),
+    also: [keys.exams],
+  });
+}
+export function useAddTopic(examId: string) {
+  return useOpt<{ id: string; title: string }, S.ExamDetail>({
+    key: keys.exam(examId),
+    fn: (b) => api.exams.addTopic(examId, b),
+    apply: (d, b) => ({
+      ...d,
+      topicCount: d.topicCount + 1,
+      topics: [...d.topics, { id: b.id, examId, title: b.title, assessment: 0, sortOrder: d.topics.length, createdAt: "", updatedAt: "" }],
+    }),
+    also: [keys.exams],
+  });
+}
+export function usePlanStudy(examId: string) {
+  return useOpt<boolean, S.Task[]>({ key: keys.tasks, fn: (replace) => api.exams.plan(examId, replace) });
+}
+export function useAddGrade() {
+  return useOpt<S.GradeCreate & { id: string }, S.Grade[]>({
+    key: keys.grades,
+    fn: (b) => api.grades.create(b),
+    apply: (d, b) => [
+      { id: b.id, subjectId: b.subjectId!, title: b.title ?? null, value: b.value, weight: b.weight ?? 1, date: b.date, source: "manuell", isNew: false, createdAt: new Date().toISOString(), updatedAt: "" },
+      ...d,
+    ],
+  });
+}
+export function useDeleteGrade() {
+  return useOpt<string, S.Grade[]>({ key: keys.grades, fn: (id) => api.grades.remove(id), apply: (d, id) => d.filter((g) => g.id !== id) });
+}
+
+/* ---------- Gym ---------- */
+export const useGymPlans = () => useQuery({ queryKey: keys.plans, queryFn: api.gym.plans });
+export const useGymHistory = () => useQuery({ queryKey: keys.gymHistory, queryFn: api.gym.history });
+export const useGymDay = (day: string) => useQuery({ queryKey: keys.gymDay(day), queryFn: () => api.gym.day(day) });
+export function useGymDays(weeks = 16) {
+  const today = useToday();
+  const from = addDays(mondayOf(today), -(weeks - 1) * 7);
+  const q = useQuery({ queryKey: keys.gymDays(from), queryFn: () => api.gym.days(from, addDays(today, 1)) });
+  return { from, done: new Set((q.data ?? []).filter((d) => d.finished).map((d) => d.day)), loaded: !q.isPending };
+}
+export function useSavePlan() {
+  return useOpt<{ id?: string; plan: S.GymPlanWrite }, S.GymPlan[]>({
+    key: keys.plans,
+    fn: ({ id, plan }) => (id ? api.gym.savePlan(id, plan) : api.gym.createPlan(plan)),
+    apply: (d, { id, plan }) => {
+      const pid = id ?? plan.id ?? "neu";
+      const full: S.GymPlan = {
+        id: pid, name: plan.name, weekdays: [...plan.weekdays].sort((a, b) => a - b), sortOrder: d.length,
+        exercises: plan.exercises.map((e, i) => ({ id: e.id ?? `n${i}`, planId: pid, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight ?? null, sortOrder: i })),
+      };
+      return id ? d.map((p) => (p.id === id ? full : p)) : [...d, full];
+    },
+    also: [["gym-day"]],
+  });
+}
+export function useDeletePlan() {
+  return useOpt<string, S.GymPlan[]>({ key: keys.plans, fn: (id) => api.gym.deletePlan(id), apply: (d, id) => d.filter((p) => p.id !== id), also: [["gym-day"]] });
+}
+export function useStartSession(day: string) {
+  return useOpt<void, S.GymDay>({ key: keys.gymDay(day), fn: () => api.gym.startSession(day), also: [["gym-days"]] });
+}
+export function useFinishSession(day: string) {
+  return useOpt<boolean, S.GymDay>({
+    key: keys.gymDay(day),
+    fn: (f) => api.gym.finish(day, f),
+    apply: (d, f) => ({ ...d, session: d.session ? { ...d.session, finishedAt: f ? new Date().toISOString() : null } : { id: "neu", day, planId: null, planName: null, finishedAt: f ? new Date().toISOString() : null, sets: [] } }),
+    also: [["gym-days"]],
+  });
+}
+export function useRemoveSession(day: string) {
+  return useOpt<void, S.GymDay>({ key: keys.gymDay(day), fn: () => api.gym.removeSession(day), apply: (d) => ({ ...d, session: null }), also: [["gym-days"]] });
+}
+export function useUpdateSet(day: string) {
+  const qc = useQueryClient();
+  return useOpt<{ id: string; patch: { done?: boolean; weight?: number | null; reps?: number } }, S.GymDay>({
+    key: keys.gymDay(day),
+    fn: ({ id, patch }) => api.gym.updateSet(id, patch),
+    apply: (d, { id, patch }) => (d.session ? { ...d, session: { ...d.session, sets: d.session.sets.map((s) => (s.id === id ? { ...s, ...patch } : s)) } } : d),
+    after: () => void qc.invalidateQueries({ queryKey: keys.gymHistory }),
   });
 }
 
-export function useSetExamStatus(examId: string) {
+/* ---------- Geld ---------- */
+export const useAccounts = () => useQuery({ queryKey: keys.accounts, queryFn: api.money.accounts });
+export const useCategories = () => useQuery({ queryKey: keys.categories, queryFn: api.money.categories });
+export const useTransactions = (month: string) => useQuery({ queryKey: keys.tx(month), queryFn: () => api.money.transactions(month) });
+export const useAllTransactions = () => useQuery({ queryKey: keys.tx("all"), queryFn: () => api.money.transactions() });
+export const useInvest = () => useQuery({ queryKey: keys.invest, queryFn: api.money.invest });
+export function useAddInvest() {
+  return useOpt<S.InvestmentEntryCreate & { id: string }, S.InvestmentEntry[]>({
+    key: keys.invest,
+    fn: (b) => api.money.addInvest(b),
+    apply: (d, b) => [...d, { id: b.id, kind: b.kind, date: b.date, amount: b.amount, note: b.note ?? null }].sort((a, c) => a.date.localeCompare(c.date)),
+  });
+}
+export function useRemoveInvest() {
+  return useOpt<string, S.InvestmentEntry[]>({ key: keys.invest, fn: (id) => api.money.removeInvest(id), apply: (d, id) => d.filter((e) => e.id !== id) });
+}
+export function useUpdateTx() {
+  return useOpt<{ id: string; patch: Record<string, unknown> }, S.Transaction[]>({
+    key: keys.tx("all"),
+    fn: ({ id, patch }) => api.money.updateTx(id, patch),
+    apply: (d, { id, patch }) =>
+      d.map((t) => {
+        if (t.id !== id) return t;
+        const { settled, ...rest } = patch as { settled?: boolean };
+        return { ...t, ...rest, ...(settled === undefined ? {} : { settledAt: settled ? new Date().toISOString() : null }) } as S.Transaction;
+      }),
+    also: [["tx"]],
+  });
+}
+
+/* ---------- Körper ---------- */
+export function useHealth(days: number) {
+  const to = useToday();
+  const from = addDays(to, -(days - 1));
+  const q = useQuery({ queryKey: keys.health(from, to), queryFn: () => api.health.list(from, to) });
+  return { from, to, rows: q.data ?? [], loaded: !q.isPending };
+}
+export function usePutHealth() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (status: ExamStatus) => api.exams.update(examId, { status }),
-    onMutate: async (status) => {
-      await qc.cancelQueries({ queryKey: keys.exam(examId) });
-      await qc.cancelQueries({ queryKey: keys.exams });
-      const prev = qc.getQueryData<ExamDetail>(keys.exam(examId));
-      const prevList = qc.getQueryData<Exam[]>(keys.exams);
-      if (prev) qc.setQueryData<ExamDetail>(keys.exam(examId), { ...prev, status });
-      qc.setQueryData<Exam[]>(keys.exams, (l) => l?.map((e) => (e.id === examId ? { ...e, status } : e)));
-      return { prev, prevList };
-    },
-    onError: (_e, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(keys.exam(examId), ctx.prev);
-      if (ctx?.prevList) qc.setQueryData(keys.exams, ctx.prevList);
-    },
-    onSuccess: (exam) => qc.setQueryData(keys.exam(examId), exam),
+  return useOpt<{ day: string; patch: S.HealthUpsert }, S.HealthDay[]>({
+    key: ["health"],
+    fn: ({ day, patch }) => api.health.put(day, patch),
+    after: () => void qc.invalidateQueries({ queryKey: ["health"] }),
   });
 }

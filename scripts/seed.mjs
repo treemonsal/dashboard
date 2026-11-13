@@ -44,13 +44,14 @@ for (const [k, val] of Object.entries(settings)) lines.push(`INSERT OR IGNORE IN
 lines.push(`INSERT OR IGNORE INTO gym_plans (id, name, weekdays, sort_order) VALUES ('p-oberkoerper', 'Oberkörper', '1,3', 0);`);
 lines.push(`INSERT OR IGNORE INTO gym_plans (id, name, weekdays, sort_order) VALUES ('p-unterkoerper', 'Unterkörper', '0,5', 1);`);
 // Kategorien: "Essen auswärts" setzt die Mahlzeit auswärts (Mutter zahlt die Hälfte), "Snack" nicht.
-lines.push(`INSERT OR IGNORE INTO categories (id, name, sort_order) VALUES ('c-essen-auswaerts', 'Essen auswärts', 0);`);
-lines.push(`INSERT OR IGNORE INTO categories (id, name, sort_order) VALUES ('c-snack', 'Snack', 1);`);
+["Lebensmittel", "Transport", "Essen auswärts", "Snack", "Unterhaltung", "Sonstiges"].forEach((n, i) =>
+  lines.push(`INSERT OR IGNORE INTO categories (id, name, sort_order) VALUES (${q("c-" + n.toLowerCase().replace("ä", "ae").replace(/[^a-z]+/g, "-"))}, ${q(n)}, ${i});`));
 // Konten ohne Saldo
 ["ZKB", "Yuh", "Revolut"].forEach((n, i) => lines.push(`INSERT OR IGNORE INTO accounts (id, name, bank, opening_balance, sort_order) VALUES (${q("a-" + n.toLowerCase())}, ${q(n)}, ${q(n)}, 0, ${i});`));
 
 const dir = mkdtempSync(join(tmpdir(), "seed-"));
 const file = join(dir, "seed.sql");
 writeFileSync(file, lines.join("\n") + "\n");
-execFileSync("npx", ["wrangler", "d1", "execute", "dashboard", target, "--file", file, "-y"], { stdio: "inherit" });
+const persist = process.env.PERSIST_TO ? ["--persist-to", process.env.PERSIST_TO] : [];
+execFileSync("npx", ["wrangler", "d1", "execute", "dashboard", target, "--file", file, "-y", ...persist], { stdio: "inherit" });
 console.log(`Startdaten eingespielt (${target}): ${subjects.length} Fächer, ${exams.length} Prüfungen.`);
