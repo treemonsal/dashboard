@@ -12,6 +12,8 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       injectRegister: false,
+      // Hinter Cloudflare Access muss das Manifest mit Cookie geladen werden.
+      useCredentials: true,
       includeAssets: ["icons/apple-touch-icon.png", "icons/icon.svg"],
       manifest: {
         id: "/",
