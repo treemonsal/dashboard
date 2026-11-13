@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dashboard",
+  "main": "src/server/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Jede Anfrage geht zuerst durch den Worker, damit der Login auch für die Oberfläche geprüft wird.
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true,
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "dashboard",
+      "database_id": "7479c36c-3f18-4281-a5b5-763241b18c46",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    // Wird nach dem Einrichten von Cloudflare Access gesetzt (Team-Domain ohne https, z.B. "tim.cloudflareaccess.com").
+    "ACCESS_TEAM_DOMAIN": "",
+    // Application Audience (AUD) Tag der Access-Anwendung.
+    "ACCESS_AUD": ""
+    // OWNER_EMAIL wird als Secret gesetzt: wrangler secret put OWNER_EMAIL
+  },
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": true }
+}

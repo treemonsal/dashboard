@@ -4,3 +4,5 @@ dist
 .dev.vars
 *.csv
 *.pdf
+dev-dist
+test-results
