@@ -10,6 +10,7 @@
     "run_worker_first": true,
     "binding": "ASSETS"
   },
+  "kv_namespaces": [{ "binding": "STATIC", "id": "7e66919df96648599328a8606b136181" }],
   "d1_databases": [
     {
       "binding": "DB",
@@ -20,9 +21,9 @@
   ],
   "vars": {
     // Wird nach dem Einrichten von Cloudflare Access gesetzt (Team-Domain ohne https, z.B. "tim.cloudflareaccess.com").
-    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_TEAM_DOMAIN": "tim-dashboard.cloudflareaccess.com",
     // Application Audience (AUD) Tag der Access-Anwendung.
-    "ACCESS_AUD": ""
+    "ACCESS_AUD": "af57f5199d1efda487376aed5e8740376b1e3fb4cf8c5be1819f471c6be5cc2b"
     // OWNER_EMAIL wird als Secret gesetzt: wrangler secret put OWNER_EMAIL
   },
   "workers_dev": true,

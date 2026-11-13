@@ -14,7 +14,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply dashboard --remote",
     "db:seed:local": "node scripts/seed.mjs --local",
     "db:seed:remote": "node scripts/seed.mjs --remote",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "node scripts/deploy.mjs"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.9.1",

@@ -40,7 +40,8 @@ const { exams, examTopics, goals, grades, habitLogs, habits, projects, subjects,
 
 export interface Bindings extends AuthEnv {
   DB: D1Database;
-  ASSETS: Fetcher;
+  ASSETS?: Fetcher;
+  STATIC?: KVNamespace;
 }
 
 type Db = DrizzleD1Database<typeof schema>;
@@ -389,7 +390,35 @@ export function createApp() {
   app.route("/api", api);
 
   // Alles andere: Oberfläche aus den statischen Dateien (SPA-Fallback übernimmt Cloudflare).
-  app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
+  app.all("*", (c) => (c.env.ASSETS ? c.env.ASSETS.fetch(c.req.raw) : serveStatic(c.env.STATIC, new URL(c.req.url).pathname)));
 
   return app;
+}
+
+const TYPES: Record<string, string> = {
+  html: "text/html; charset=utf-8", js: "text/javascript; charset=utf-8", css: "text/css; charset=utf-8",
+  json: "application/json", webmanifest: "application/manifest+json", svg: "image/svg+xml",
+  png: "image/png", woff2: "font/woff2", ico: "image/x-icon", map: "application/json",
+};
+
+/**
+ * Liefert die Oberfläche aus dem KV-Speicher. Nötig, weil der normale Datei-Upload von Cloudflare
+ * aus der Cloud-Sitzung nicht funktioniert (siehe scripts/deploy.mjs).
+ */
+async function serveStatic(kv: KVNamespace | undefined, pathname: string): Promise<Response> {
+  if (!kv) return new Response("Oberfläche nicht gefunden", { status: 500 });
+  let key = pathname === "/" ? "/index.html" : pathname;
+  let body = await kv.get(key, "arrayBuffer");
+  if (!body && !/\.[a-z0-9]+$/i.test(key)) {
+    key = "/index.html";
+    body = await kv.get(key, "arrayBuffer");
+  }
+  if (!body) return new Response("Nicht gefunden", { status: 404 });
+  const ext = key.split(".").pop() ?? "";
+  return new Response(body, {
+    headers: {
+      "content-type": TYPES[ext] ?? "application/octet-stream",
+      "cache-control": key.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
+    },
+  });
 }
