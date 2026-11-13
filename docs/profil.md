@@ -8,6 +8,18 @@ Stand 14.11.2026. Diese Datei zuerst lesen, bevor etwas geplant oder gefragt wir
 - Aufstehen 06:30, schlafen 22:00
 - Hauptgerät: iPhone. Die App wird fast nur dort benutzt.
 
+## Person
+- Geboren am 10. Mai 2011.
+
+## Gym
+- Montag und Mittwoch Oberkörper, Freitag Unterkörper.
+- Sonntag Unterkörper, klappt bisher etwa jede zweite Woche. Ziel: jede Woche, also 4 Trainings pro Woche.
+
+## Geld
+- Lohn 850 pro Monat (Tim sagte "Pfund", gemeint sind fast sicher Franken, noch bestätigen lassen).
+- 350 pro Monat gehen fix in den S&P 500. Das Depot soll im Bereich Geld sichtbar sein: Wert, Einzahlungen, Gewinn.
+- Frei verfügbar also 500 pro Monat.
+
 ## Ziele
 - Gym: ästhetischen Körper aufbauen. Wichtig ist Konstanz, sichtbar als Raster (Tag im Gym = weiss, sonst dunkel).
 - Noten: Schnitt mindestens 4.5, kein einzelnes Fach unter 4.

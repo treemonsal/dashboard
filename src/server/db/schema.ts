@@ -153,3 +153,126 @@ export const goals = sqliteTable("goals", {
   deadline: text("deadline"), // YYYY-MM-DD
   ...timestamps,
 });
+
+/* ---------- Einstellungen ---------- */
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at").notNull().default(now),
+});
+
+/* ---------- Lernen aus dem Alltag: ein Eintrag pro Erledigen ---------- */
+export const taskEvents = sqliteTable(
+  "task_events",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id").references(() => tasks.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    day: text("day").notNull(), // YYYY-MM-DD, Europe/Zurich
+    weekday: integer("weekday").notNull(), // 0 = Sonntag ... 6 = Samstag
+    plannedTime: text("planned_time"), // HH:MM laut Plan
+    doneTime: text("done_time").notNull(), // HH:MM tatsächlich
+    durationMin: integer("duration_min"), // tatsächliche Dauer, sonst geplante
+    plannedMin: integer("planned_min"),
+    ...timestamps,
+  },
+  (t) => [index("task_events_task_idx").on(t.taskId), index("task_events_day_idx").on(t.day)],
+);
+
+/* ---------- Gym ---------- */
+export const gymPlans = sqliteTable("gym_plans", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  // Wochentage als Komma-Liste, 0 = Sonntag ... 6 = Samstag, z.B. "1,3,5"
+  weekdays: text("weekdays").notNull().default(""),
+  sortOrder: integer("sort_order").notNull().default(0),
+  ...timestamps,
+});
+
+export const gymExercises = sqliteTable(
+  "gym_exercises",
+  {
+    id: text("id").primaryKey(),
+    planId: text("plan_id").notNull().references(() => gymPlans.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    sets: integer("sets").notNull().default(3),
+    reps: integer("reps").notNull().default(10),
+    weight: real("weight"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [index("gym_exercises_plan_idx").on(t.planId)],
+);
+
+export const gymSessions = sqliteTable(
+  "gym_sessions",
+  {
+    id: text("id").primaryKey(),
+    day: text("day").notNull(), // YYYY-MM-DD
+    planId: text("plan_id").references(() => gymPlans.id, { onDelete: "set null" }),
+    planName: text("plan_name"),
+    finishedAt: text("finished_at"),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("gym_sessions_day_uq").on(t.day)],
+);
+
+export const gymSets = sqliteTable(
+  "gym_sets",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id").notNull().references(() => gymSessions.id, { onDelete: "cascade" }),
+    exerciseName: text("exercise_name").notNull(),
+    exerciseOrder: integer("exercise_order").notNull().default(0),
+    setIndex: integer("set_index").notNull().default(0),
+    reps: integer("reps").notNull().default(10),
+    weight: real("weight"),
+    done: integer("done", { mode: "boolean" }).notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [index("gym_sets_session_idx").on(t.sessionId), index("gym_sets_name_idx").on(t.exerciseName)],
+);
+
+/* ---------- Geld (Parser folgt später; Tabellen und API stehen) ---------- */
+export const accounts = sqliteTable("accounts", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  bank: text("bank"),
+  currency: text("currency").notNull().default("CHF"),
+  openingBalance: real("opening_balance").notNull().default(0),
+  sortOrder: integer("sort_order").notNull().default(0),
+  ...timestamps,
+});
+
+export const categories = sqliteTable("categories", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  ...timestamps,
+});
+
+export const transactions = sqliteTable(
+  "transactions",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
+    categoryId: text("category_id").references(() => categories.id, { onDelete: "set null" }),
+    date: text("date").notNull(), // YYYY-MM-DD
+    // Negativ = Ausgabe, positiv = Einnahme
+    amount: real("amount").notNull(),
+    description: text("description"),
+    ...timestamps,
+  },
+  (t) => [index("transactions_date_idx").on(t.date), index("transactions_account_idx").on(t.accountId), index("transactions_category_idx").on(t.categoryId)],
+);
+
+/* ---------- Körper ---------- */
+export const healthDaily = sqliteTable("health_daily", {
+  day: text("day").primaryKey(), // YYYY-MM-DD
+  sleepMin: integer("sleep_min"),
+  steps: integer("steps"),
+  restingHr: integer("resting_hr"),
+  weightKg: real("weight_kg"),
+  source: text("source").notNull().default("manual"),
+  ...timestamps,
+});

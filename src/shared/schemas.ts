@@ -37,7 +37,14 @@ export const taskCreate = z.object({
   examId: id.nullable().optional(),
   sortOrder: z.number().int().optional(),
 });
-export const taskUpdate = taskCreate.omit({ id: true }).partial().extend({ done: z.boolean().optional() });
+export const taskUpdate = taskCreate
+  .omit({ id: true })
+  .partial()
+  .extend({
+    done: z.boolean().optional(),
+    // Tatsächliche Dauer beim Erledigen; sonst gilt die geplante.
+    actualMin: z.number().int().min(1).max(24 * 60).optional(),
+  });
 export const taskQuery = z.object({
   view: z.enum(["all", "today"]).default("all"),
   examId: id.optional(),
@@ -131,6 +138,79 @@ export const goalUpdate = goalCreate.omit({ id: true }).partial();
 export const goalQuery = z.object({ area: z.string().max(40).optional() });
 
 export const syncRunQuery = z.object({ kind: z.string().max(40).optional(), limit: z.coerce.number().int().min(1).max(100).default(10) });
+
+/* ---------- Einstellungen ---------- */
+export const weekdayList = z.string().regex(/^([0-6](,[0-6])*)?$/, "Wochentage als Liste 0 bis 6");
+export const settingsUpdate = z
+  .object({
+    birthDate: z.union([isoDate, z.literal("")]),
+    wakeTime: clockTime,
+    sleepTime: clockTime,
+    workDays: weekdayList,
+    schoolDays: weekdayList,
+    gymGoal: z.string().regex(/^[1-7]$/),
+  })
+  .partial()
+  .strict();
+export type Settings = {
+  birthDate: string;
+  wakeTime: string;
+  sleepTime: string;
+  workDays: string;
+  schoolDays: string;
+  gymGoal: string;
+};
+export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "3" };
+
+/* ---------- Lernplan ---------- */
+export const studyPlanRequest = z.object({ replace: z.boolean().optional(), blockMin: z.number().int().min(10).max(240).optional() });
+
+/* ---------- Gym ---------- */
+const weekdayNum = z.number().int().min(0).max(6);
+export const gymExerciseWrite = z.object({
+  id: id.optional(),
+  name: text(120),
+  sets: z.number().int().min(1).max(12),
+  reps: z.number().int().min(1).max(100),
+  weight: z.number().min(0).max(1000).nullable().optional(),
+});
+export const gymPlanWrite = z.object({
+  id: id.optional(),
+  name: text(80),
+  weekdays: z.array(weekdayNum).max(7),
+  exercises: z.array(gymExerciseWrite).max(40),
+});
+export const gymSessionCreate = z.object({ planId: id.nullable().optional() });
+export const gymSessionUpdate = z.object({ finished: z.boolean() });
+export const gymSetUpdate = z.object({ done: z.boolean().optional(), weight: z.number().min(0).max(1000).nullable().optional(), reps: z.number().int().min(0).max(100).optional() });
+export const gymDaysQuery = z.object({ from: isoDate, to: isoDate });
+
+/* ---------- Geld ---------- */
+export const accountCreate = z.object({ id: id.optional(), name: text(80), bank: optText(80), currency: text(3).optional(), openingBalance: z.number().optional(), sortOrder: z.number().int().optional() });
+export const categoryCreate = z.object({ id: id.optional(), name: text(60), sortOrder: z.number().int().optional() });
+export const transactionCreate = z.object({
+  id: id.optional(),
+  accountId: id,
+  categoryId: id.nullable().optional(),
+  date: isoDate,
+  amount: z.number().min(-1e9).max(1e9),
+  description: optText(300),
+});
+export const transactionBulk = z.object({ transactions: z.array(transactionCreate).min(1).max(1000) });
+export const transactionUpdate = transactionCreate.omit({ id: true }).partial();
+export const transactionQuery = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/).optional(), limit: z.coerce.number().int().min(1).max(1000).default(200) });
+
+/* ---------- Körper ---------- */
+export const healthUpsert = z
+  .object({
+    sleepMin: z.number().int().min(0).max(1440).nullable(),
+    steps: z.number().int().min(0).max(200_000).nullable(),
+    restingHr: z.number().int().min(20).max(250).nullable(),
+    weightKg: z.number().min(20).max(400).nullable(),
+    source: z.enum(["manual", "fitbit"]),
+  })
+  .partial();
+export const healthQuery = z.object({ from: isoDate.optional(), to: isoDate.optional() });
 
 /* ---------- Antworten ---------- */
 export type ExamStatus = z.infer<typeof examStatus>;
@@ -266,3 +346,98 @@ export type HabitLogUpsert = z.input<typeof habitLogUpsert>;
 export type GoalCreate = z.input<typeof goalCreate>;
 export type GoalUpdate = z.input<typeof goalUpdate>;
 export type ProjectUpdate = z.input<typeof projectUpdate>;
+
+export type SettingsUpdate = z.input<typeof settingsUpdate>;
+export type GymPlanWrite = z.input<typeof gymPlanWrite>;
+export type TransactionCreate = z.input<typeof transactionCreate>;
+export type AccountCreate = z.input<typeof accountCreate>;
+export type HealthUpsert = z.input<typeof healthUpsert>;
+
+export interface GymExercise {
+  id: string;
+  planId: string;
+  name: string;
+  sets: number;
+  reps: number;
+  weight: number | null;
+  sortOrder: number;
+}
+export interface GymPlan {
+  id: string;
+  name: string;
+  weekdays: number[];
+  sortOrder: number;
+  exercises: GymExercise[];
+}
+export interface GymSet {
+  id: string;
+  sessionId: string;
+  exerciseName: string;
+  exerciseOrder: number;
+  setIndex: number;
+  reps: number;
+  weight: number | null;
+  done: boolean;
+}
+export interface GymSession {
+  id: string;
+  day: string;
+  planId: string | null;
+  planName: string | null;
+  finishedAt: string | null;
+  sets: GymSet[];
+}
+/** Alles, was die Oberfläche für einen Tag im Gym-Raster braucht. */
+export interface GymDay {
+  day: string;
+  plan: GymPlan | null;
+  session: GymSession | null;
+}
+export interface GymHistoryPoint {
+  day: string;
+  weight: number;
+}
+
+export interface Account {
+  id: string;
+  name: string;
+  bank: string | null;
+  currency: string;
+  openingBalance: number;
+  balance: number;
+  sortOrder: number;
+}
+export interface Category {
+  id: string;
+  name: string;
+  sortOrder: number;
+}
+export interface Transaction {
+  id: string;
+  accountId: string;
+  categoryId: string | null;
+  date: string;
+  amount: number;
+  description: string | null;
+}
+
+export interface HealthDay {
+  day: string;
+  sleepMin: number | null;
+  steps: number | null;
+  restingHr: number | null;
+  weightKg: number | null;
+  source: "manual" | "fitbit";
+}
+
+export interface TaskEvent {
+  id: string;
+  taskId: string | null;
+  title: string;
+  day: string;
+  weekday: number;
+  plannedTime: string | null;
+  doneTime: string;
+  durationMin: number | null;
+  plannedMin: number | null;
+}

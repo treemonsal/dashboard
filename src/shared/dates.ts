@@ -125,3 +125,43 @@ export function clusterAfterNext<T extends DatedItem>(sortedUpcoming: T[], windo
   if (inWindow.length < 2) return null;
   return { count: inWindow.length, spanDays: daysBetween(first, inWindow[inWindow.length - 1].date) };
 }
+
+/** 0 = Sonntag ... 6 = Samstag */
+export function weekdayNum(date: string): number {
+  return new Date(utcDay(date)).getUTCDay();
+}
+
+/** Aktuelle Uhrzeit in Zürich als "HH:MM". */
+export function timeInZone(now: Date = new Date(), zone: string = ZONE): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: zone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(now);
+}
+
+/** "HH:MM" in Minuten seit Mitternacht. */
+export function minutesOf(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+export function clockOf(min: number): string {
+  const m = ((Math.round(min) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** Montag der Woche, in der `date` liegt. */
+export function mondayOf(date: string): string {
+  return addDays(date, -((weekdayNum(date) + 6) % 7));
+}
+
+export function monthLong(m: number): string {
+  return MONTHS[m - 1];
+}
+
+/** "Mo 9. Nov" */
+export function dayCompact(date: string): string {
+  const [, m, d] = parts(date);
+  return `${WEEKDAYS_SHORT[weekdayNum(date)]} ${d}. ${MONTHS[m - 1].slice(0, 3)}`;
+}
+
+export const WEEKDAY_LETTERS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+/** Anzeigereihenfolge Montag zuerst */
+export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];

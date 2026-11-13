@@ -8,6 +8,13 @@
       "when": 1794609729189,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1794611300644,
+      "tag": "0001_ebene2",
+      "breakpoints": true
     }
   ]
 }

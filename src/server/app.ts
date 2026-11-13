@@ -1,8 +1,7 @@
-import { Hono, type Context } from "hono";
+import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { and, asc, desc, eq, getTableColumns, gte, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
-import type { z } from "zod";
 import * as schema from "./db/schema";
 import { checkAccess, type AuthEnv } from "./auth";
 import {
@@ -33,34 +32,14 @@ import {
   type Exam,
   type ExamDetail,
 } from "../shared/schemas";
-import { todayInZone, zoneMidnightUtc } from "../shared/dates";
+import { timeInZone, todayInZone, weekdayNum, zoneMidnightUtc } from "../shared/dates";
 import { z as zod } from "zod";
+import { idParam, newId, nowIso, notFound, v, type AppEnv, type Bindings, type Db } from "./util";
+import { registerExtra } from "./routes";
 
-const { exams, examTopics, goals, grades, habitLogs, habits, projects, subjects, syncRuns, tasks } = schema;
+const { taskEvents, exams, examTopics, goals, grades, habitLogs, habits, projects, subjects, syncRuns, tasks } = schema;
 
-export interface Bindings extends AuthEnv {
-  DB: D1Database;
-  ASSETS?: Fetcher;
-  STATIC?: KVNamespace;
-}
-
-type Db = DrizzleD1Database<typeof schema>;
-type AppEnv = { Bindings: Bindings; Variables: { db: Db; email: string } };
-
-const nowIso = () => new Date().toISOString();
-const newId = () => crypto.randomUUID();
-
-/** Validierung mit einheitlicher Fehlerantwort. */
-function v<T extends z.ZodType, K extends "json" | "query" | "param">(target: K, s: T) {
-  return zValidator(target, s, (r, c) => {
-    if (!r.success) return c.json({ error: "Ungültige Eingabe", issues: r.error.issues }, 400);
-  });
-}
-const idParam = zod.object({ id: idSchema });
-
-function notFound(c: Context) {
-  return c.json({ error: "Nicht gefunden" }, 404);
-}
+export type { Bindings };
 
 async function subjectIdFrom(db: Db, input: { subjectId?: string; subjectCode?: string }): Promise<string | null> {
   if (input.subjectId) return input.subjectId;
@@ -173,18 +152,41 @@ export function createApp() {
     return c.json(row, 201);
   });
   api.patch("/tasks/:id", v("param", idParam), v("json", taskUpdate), async (c) => {
-    const { done, ...rest } = c.req.valid("json");
+    const { done, actualMin, ...rest } = c.req.valid("json");
     const taskId = c.req.valid("param").id;
     if (rest.parentId === taskId) return c.json({ error: "Eine Aufgabe kann nicht ihre eigene Unteraufgabe sein" }, 400);
     const set: Partial<typeof tasks.$inferInsert> = { ...rest, updatedAt: nowIso() };
+    const current = await c.var.db.select().from(tasks).where(eq(tasks.id, taskId)).get();
+    if (!current) return notFound(c);
     if (done !== undefined) {
-      const current = await c.var.db.select({ doneAt: tasks.doneAt }).from(tasks).where(eq(tasks.id, taskId)).get();
-      if (!current) return notFound(c);
       // Bereits erledigte Aufgaben behalten ihren ursprünglichen Zeitpunkt.
       set.doneAt = done ? (current.doneAt ?? nowIso()) : null;
     }
     const row = await c.var.db.update(tasks).set(set).where(eq(tasks.id, taskId)).returning().get();
-    return row ? c.json(row) : notFound(c);
+    if (!row) return notFound(c);
+    // Lernen aus dem Alltag: pro Erledigen Wochentag, Uhrzeit und Dauer festhalten.
+    if (done === true && !current.doneAt) {
+      const at = new Date(row.doneAt!);
+      const day = todayInZone(at);
+      await c.var.db.insert(taskEvents).values({
+        id: newId(),
+        taskId,
+        title: row.title,
+        day,
+        weekday: weekdayNum(day),
+        plannedTime: row.dueTime,
+        doneTime: timeInZone(at),
+        durationMin: actualMin ?? row.durationMin,
+        plannedMin: row.durationMin,
+      });
+    } else if (done === false && current.doneAt) {
+      await c.var.db.delete(taskEvents).where(eq(taskEvents.taskId, taskId));
+    }
+    return c.json(row);
+  });
+  api.delete("/tasks/:id", v("param", idParam), async (c) => {
+    const row = await c.var.db.delete(tasks).where(eq(tasks.id, c.req.valid("param").id)).returning({ id: tasks.id }).get();
+    return row ? c.json({ ok: true }) : notFound(c);
   });
 
   /* ---------- Fächer ---------- */
@@ -303,6 +305,11 @@ export function createApp() {
     return row ? c.json(row) : notFound(c);
   });
 
+  api.delete("/grades/:id", v("param", idParam), async (c) => {
+    const row = await c.var.db.delete(grades).where(eq(grades.id, c.req.valid("param").id)).returning({ id: grades.id }).get();
+    return row ? c.json({ ok: true }) : notFound(c);
+  });
+
   /* ---------- Gewohnheiten ---------- */
   api.get("/habits", async (c) => c.json(await c.var.db.select().from(habits).orderBy(asc(habits.sortOrder), asc(habits.createdAt))));
   api.post("/habits", v("json", habitCreate), async (c) => {
@@ -385,6 +392,8 @@ export function createApp() {
       .limit(limit);
     return c.json(rows);
   });
+
+  registerExtra(api);
 
   api.all("*", (c) => c.json({ error: "Nicht gefunden" }, 404));
   app.route("/api", api);
