@@ -31,7 +31,7 @@ import {
 } from "../shared/schemas";
 import { planStudyBlocks } from "../shared/lernplan";
 import { todayInZone, weekdayNum } from "../shared/dates";
-import { commitImport, learnFromCorrection, previewImport, recompute } from "./bankimport";
+import { commitImport, learnFromCorrection, previewImport, recompute, unconfirmedPdf } from "./bankimport";
 import { registerCalendar } from "./calendar";
 import { registerPush } from "./push";
 import { registerTimetable } from "./timetable";
@@ -385,7 +385,11 @@ export function registerExtra(api: Hono<AppEnv>) {
 
   /* ---------- Bank-Import ---------- */
   api.post("/import/preview", v("json", importRequest), async (c) => c.json(await previewImport(c.var.db, c.req.valid("json").files)));
-  api.post("/import/commit", v("json", importRequest), async (c) => c.json(await commitImport(c.var.db, c.req.valid("json").files), 201));
+  api.post("/import/commit", v("json", importRequest), async (c) => {
+    const files = c.req.valid("json").files;
+    if (unconfirmedPdf(files)) return c.json({ error: "Unsichere PDF-Zeilen: nur nach Bestätigung speichern" }, 400);
+    return c.json(await commitImport(c.var.db, files), 201);
+  });
   api.get("/category-rules", async (c) => c.json(await c.var.db.select().from(t.categoryRules).orderBy(desc(t.categoryRules.createdAt))));
 
   /* ---------- Körper ---------- */

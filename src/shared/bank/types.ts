@@ -65,4 +65,7 @@ export interface ParseResult {
   needsConfirmation?: boolean;
   suggestedMapping?: ColumnMapping;
   header?: string[];
+  /** PDF: Zahl unsicherer Zeilen; grösser als 0 heisst: nur nach Bestätigung speichern */
+  uncertain?: number;
+  source?: "pdf";
 }

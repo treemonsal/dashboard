@@ -82,3 +82,37 @@ CARD_PAYMENT,Current,2026-11-09 10:00:00,2026-11-09 10:00:00,Testkiosk Hauptbahn
   });
 
 });
+
+describe("Bank-Import aus PDF (Zeilen statt Datei)", () => {
+  const rows = [
+    { date: "2026-10-01", description: "PDF Testladen", amount: -1250, currency: "CHF", amountChf: -1250, balance: 98750 },
+    { date: "2026-10-02", description: "PDF Twint", amount: 2500, currency: "CHF", amountChf: 2500, balance: 101250 },
+  ];
+  it("Vorschau speichert nichts, Speichern legt Buchungen an, zweiter Upload ist doppelt", async () => {
+    const files = [{ name: "auszug.pdf", pdf: { bank: "revolut", account: "REVOLUTPDF", rows } }];
+    const pre = await call<ImportPreview>("POST", "/api/import/preview", { files });
+    expect(pre.status).toBe(200);
+    expect(pre.data.fresh).toBe(2);
+    expect((await call<Transaction[]>("GET", "/api/transactions?month=2026-10")).data.filter((t) => t.description?.startsWith("PDF"))).toHaveLength(0);
+    const res = await call<ImportResult>("POST", "/api/import/commit", { files });
+    expect(res.status).toBe(201);
+    expect(res.data.inserted).toBe(2);
+    const again = await call<ImportResult>("POST", "/api/import/commit", { files });
+    expect(again.data.inserted).toBe(0);
+    expect(again.data.duplicates).toBe(2);
+    const tx = (await call<Transaction[]>("GET", "/api/transactions?month=2026-10")).data.filter((t) => t.description?.startsWith("PDF"));
+    expect(tx.map((t) => t.amount).sort((a, b) => a - b)).toEqual([-12.5, 25]);
+  });
+  it("unsichere Zeilen werden nur nach Bestätigung gespeichert", async () => {
+    const r2 = [{ date: "2026-10-09", description: "PDF Unsicher", amount: -500, currency: "CHF", amountChf: -500 }];
+    const unsure = { name: "u.pdf", pdf: { bank: "revolut", account: "REVOLUTPDF", uncertain: 2, rows: r2 } };
+    expect((await call("POST", "/api/import/commit", { files: [unsure] })).status).toBe(400);
+    expect((await call("POST", "/api/import/preview", { files: [unsure] })).status).toBe(200);
+    const ok = await call<ImportResult>("POST", "/api/import/commit", { files: [{ ...unsure, pdf: { ...unsure.pdf, confirmed: true } }] });
+    expect(ok.data.inserted).toBe(1);
+  });
+  it("Müll wird abgelehnt", async () => {
+    const bad = { name: "x.pdf", pdf: { bank: "revolut", rows: [{ date: "kein Datum", description: "x", amount: 1.5, currency: "CHF", amountChf: 1 }] } };
+    expect((await call("POST", "/api/import/preview", { files: [bad] })).status).toBe(400);
+  });
+});

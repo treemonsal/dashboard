@@ -7,3 +7,4 @@ export { categorize, applyCategories, learnRule, merchantName, DEFAULT_RULES, CA
 export { markInternalTransfers } from "./transfers";
 export { mealShares, isMeal, type MealSettings, type MealEntry, type MealResult } from "./meals";
 export { monthSummary, type MonthSummary, type CategoryTotal, type SummaryOptions } from "./summary";
+export { parsePdf, groupLines, pdfText, matchDate, findHeader, rowsToResult, type PdfItem, type PdfLine, type PdfCell, type PdfParse, type PdfStats } from "./pdf";

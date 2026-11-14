@@ -10,6 +10,28 @@ import { notify } from "./toast";
 
 const BANK: Record<string, string> = { revolut: "Revolut", zkb: "ZKB", yuh: "Yuh", unbekannt: "Bank nicht erkannt" };
 
+const isPdf = (f: File) => f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;opacity:0";
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      return document.execCommand("copy");
+    } catch {
+      return false;
+    } finally {
+      ta.remove();
+    }
+  }
+}
+
 async function readText(f: File): Promise<string> {
   const buf = await f.arrayBuffer();
   try {
@@ -29,10 +51,13 @@ export function UploadAction() {
     if (!list.length) return;
     try {
       const files: ImportFileIn[] = [];
-      for (const f of list) files.push({ name: f.name, text: await readText(f) });
+      for (const f of list) {
+        if (isPdf(f)) files.push(await (await import("./pdf")).readPdfFile(f));
+        else files.push({ name: f.name, text: await readText(f) });
+      }
       sheet.open(<ImportSheet initial={files} />);
-    } catch {
-      notify("Datei konnte nicht gelesen werden");
+    } catch (e) {
+      notify((e as Error)?.message === "PDF zu gross" ? "PDF zu gross" : "Datei konnte nicht gelesen werden");
     }
   }
   return (
@@ -40,7 +65,7 @@ export function UploadAction() {
       <i>
         <Icon n="upload" />
       </i>
-      <input ref={input} type="file" multiple accept=".csv,.txt,text/csv,text/plain,application/vnd.ms-excel" onChange={pick} aria-label="Bank-Export hochladen"
+      <input ref={input} type="file" multiple accept=".csv,.txt,.pdf,text/csv,text/plain,application/pdf,application/vnd.ms-excel" onChange={pick} aria-label="Bank-Export hochladen"
         style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }} />
     </label>
   );
@@ -96,6 +121,32 @@ function MapStep({ file, preview, onDone, onBack }: { file: ImportFileIn; previe
   );
 }
 
+/** Hinweise zu einem PDF: Warnung mit Zahl unsicherer Zeilen, Bestätigung, erkannten Text kopieren. */
+function PdfNotes({ file, onConfirm }: { file: ImportFileIn; onConfirm: (c: boolean) => void }) {
+  const pdf = file.pdf!;
+  const info = file.pdfInfo;
+  return (
+    <div style={{ marginTop: 6 }}>
+      {(info?.warnings ?? []).map((w, j) => (<div key={j} className="warn" style={{ fontSize: 13, marginTop: 4 }}>{w}</div>))}
+      {pdf.uncertain > 0 && (
+        <div className="warn" style={{ fontSize: 14, fontWeight: 600, marginTop: 6 }}>
+          {pdf.uncertain} {pdf.uncertain === 1 ? "Zeile ist" : "Zeilen sind"} unsicher. Nichts wird gespeichert, bevor du bestätigst.
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+        {pdf.uncertain > 0 && (
+          <button type="button" className="chip btn press" aria-pressed={pdf.confirmed} onClick={() => onConfirm(!pdf.confirmed)}>
+            {pdf.confirmed ? "Bestätigt" : "Geprüft, speichern"}
+          </button>
+        )}
+        {info?.text && (
+          <button type="button" className="chip btn press" onClick={async () => notify((await copyText(info.text)) ? "Text kopiert" : "Kopieren nicht möglich")}>Erkannten Text kopieren</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ImportSheet({ initial }: { initial: ImportFileIn[] }) {
   const sheet = useSheet();
   const qc = useQueryClient();
@@ -129,6 +180,7 @@ export function ImportSheet({ initial }: { initial: ImportFileIn[] }) {
     }
   }
 
+  const blocked = files.some((f) => f.pdf && f.pdf.uncertain > 0 && !f.pdf.confirmed);
   if (res) {
     return (
       <div>
@@ -158,10 +210,11 @@ export function ImportSheet({ initial }: { initial: ImportFileIn[] }) {
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                 <div style={{ minWidth: 0 }}>
                   <b style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</b>
-                  <span className="muted" style={{ fontSize: 13 }}>{BANK[p.bank] ?? p.bank}{p.needsConfirmation ? "" : ` · ${p.fresh} neu · ${p.duplicates} schon vorhanden`}</span>
+                  <span className="muted" style={{ fontSize: 13 }}>{BANK[p.bank] ?? p.bank}{files[i]?.pdf ? " · PDF" : ""}{p.needsConfirmation ? "" : ` · ${p.fresh} neu · ${p.duplicates} schon vorhanden`}</span>
                 </div>
                 {p.needsConfirmation && <button type="button" className="chip btn press" onClick={() => setMapIdx(i)}>Spalten zuordnen</button>}
               </div>
+              {files[i]?.pdf && <PdfNotes file={files[i]!} onConfirm={(c) => setFiles(files.map((f, k) => (k === i && f.pdf ? { ...f, pdf: { ...f.pdf, confirmed: c } } : f)))} />}
               {p.warnings.map((w, j) => (<div key={j} className="warn" style={{ fontSize: 13, marginTop: 4 }}>{w}</div>))}
               {p.sample.map((s, j) => (
                 <div key={j} className="row" style={{ minHeight: 40 }}>
@@ -171,8 +224,8 @@ export function ImportSheet({ initial }: { initial: ImportFileIn[] }) {
               ))}
             </div>
           ))}
-          <button type="button" className="cta press" disabled={busy || pre.fresh === 0} onClick={save}>
-            {pre.fresh === 0 ? "Nichts Neues" : `${pre.fresh} Buchungen speichern`}
+          <button type="button" className="cta press" disabled={busy || pre.fresh === 0 || blocked} onClick={save}>
+            {pre.fresh === 0 ? "Nichts Neues" : blocked ? "Zuerst bestätigen" : `${pre.fresh} Buchungen speichern`}
           </button>
         </>
       )}

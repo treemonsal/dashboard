@@ -31,7 +31,7 @@ Quellen
 - Tabellen (Migration `0005_gesundheit`): `health_connection` (Tokens, verschlüsselt), `health_oauth_state` (laufende Anmeldung), `health_workouts` (Trainings). Schlaf, Schritte, Ruhepuls, Gewicht gehen in die bestehende `health_daily` (Quelle `fitbit`).
 - Tokens: AES-256-GCM, Schlüssel aus dem Secret `HEALTH_TOKEN_KEY`. Client-ID und Secret in der App eingetragen (verschlüsselt in D1) oder als Worker-Secrets. Nichts davon in Code, Antworten, Logs oder `sync_runs`.
 - Routen (alle hinter Cloudflare Access): `GET /api/fitbit/status`, `POST /api/fitbit/connect`, `GET /api/fitbit/callback`, `POST /api/fitbit/sync`, `DELETE /api/fitbit/connection`, `GET /api/fitbit/workouts`.
-- Abgleich `syncHealth(env)`: beim ersten Verbinden die letzten 30 Tage, danach die letzten 3 Tage (so kommen spät übertragene Werte nach). Der Cron (alle 5 Minuten) startet ihn einmal pro Zürcher Tag ab 08:00, nicht nachts: der Schlaf endet erst, wenn du aufwachst, und das Fitbit überträgt erst dann. Nach einem Fehler versucht er es nach etwa einer Stunde wieder. Dazu der Knopf "Jetzt abgleichen".
+- Abgleich `syncHealth(env)`: beim ersten Verbinden die letzten 30 Tage, danach die letzten 2 Tage (so kommen spät übertragene Werte nach). Der Cron (alle 5 Minuten) startet ihn stündlich von 06:00 bis 23:59 Zürcher Zeit (55 Minuten Abstand), nach einem Fehler frühestens nach 30 Minuten wieder. Dazu beim Öffnen der App (POST /api/fitbit/sync-if-stale, ruft main.tsx beim Start auf), wenn der letzte Lauf, auch ein fehlgeschlagener, mindestens 30 Minuten her ist, und der Knopf "Jetzt abgleichen". Limiten laut Google (developers.google.com/health/rate-limits, Stand 30.10.2026): 300 Anfragen pro Minute und Nutzer, 86,4 Mio pro Tag und Projekt. Ein Abgleich braucht rund zehn Anfragen, also etwa 180 pro Tag: weit darunter.
 - Zuordnung: Schlaf zählt zum Tag des Aufwachens (Europe/Zurich), Minuten Schlaf ohne Wachphasen, Nickerchen zählen nicht, mehrteilige Nächte werden addiert. Gewicht: letzte Wägung des Tages. Training: Tag des Beginns, Dauer, Kalorien, mittlerer Puls. Fehlt ein Wert in der Antwort, bleibt ein vorhandener (auch von Hand eingetragener) stehen.
 - Fehler werden ehrlich gemeldet: je Messgrösse ("Gewicht: Keine Berechtigung …"), abgelaufener Zugang als "Neu verbinden", alles in `sync_runs` (Art `fitbit`).
 - Oberfläche: Einstellungen, Abschnitt "Fitbit" (verbinden, Status, abgleichen, trennen) und der Leerzustand im Körper-Tab.
@@ -52,7 +52,7 @@ Du brauchst nur die App: Körper-Tab, "Einrichten" (oder Einstellungen, Fitbit, 
 
 Falls Google wegen des Alters kein Projekt zulässt: Ein Elternteil macht die Schritte 1 bis 5 im eigenen Google-Konto und trägt deine E-Mail als Testnutzer ein.
 
-Danach läuft es von selbst, jeden Morgen nach 08:00. Die Knopfnamen stammen aus der Google-Doku (developers.google.com/health/setup) und stehen deutsch mit dem englischen Namen in Klammern, weil die deutsche Console nicht geprüft werden konnte.
+Danach läuft es von selbst, stündlich ab 06:00. Die Knopfnamen stammen aus der Google-Doku (developers.google.com/health/setup) und stehen deutsch mit dem englischen Namen in Klammern, weil die deutsche Console nicht geprüft werden konnte.
 
 Wenn es nicht klappt: Der Abschnitt "Fitbit" in den Einstellungen zeigt die Meldung. Häufig: "Neu verbinden" (Zugang abgelaufen: nochmals verbinden), "Keine Berechtigung" (ein Recht abgewählt oder API nicht aktiviert), "redirect_uri_mismatch" bei Google (Adresse in Schritt 5 stimmt nicht).
 
@@ -69,5 +69,5 @@ Nicht geprüft, weil Zugangsdaten fehlen:
 
 ## 5. Risiken
 - Die Schnittstelle ist neu (seit März 2026) und die Rechtenamen wurden im Mai 2026 geändert; Google ändert sie eventuell wieder.
-- Schlaf: ein Schlaf, den das Fitbit erst nach 08:00 überträgt, kommt am nächsten Tag (der Abgleich holt immer die letzten 3 Tage).
+- Schlaf: ein Schlaf, den das Fitbit erst später überträgt, kommt beim nächsten stündlichen Abgleich (der Abgleich holt immer die letzten 2 Tage).
 - Das Secret `HEALTH_TOKEN_KEY` darf sich nie ändern.

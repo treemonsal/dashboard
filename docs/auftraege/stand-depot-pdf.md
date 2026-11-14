@@ -1,4 +1,4 @@
 # Stand Depot und PDF
-Fertig: Depot-Rechnung (src/shared/depot.ts), Migration 0008 (estimated; lokal und remote angewendet), Kursabruf (src/server/depot), Cron ab 23:00, Route POST /api/depot/refresh, Tests grün (434).
-Remote geprüft: investment_entries ist leer (kein Eintrag 3175 vorhanden), investStart = 2026-11-14 wird nicht mehr gerechnet.
-Als Nächstes: Depot-Oberfläche (geld.tsx, Einstellungen Anteile), docs/depot.md, dann Fitbit stündlich, dann PDF.
+Fertig und geprüft: Depot (Rechnung, Migration 0008 remote, Kursabruf Cboe plus Frankfurter, Cron ab 23:00, Oberfläche), Fitbit stündlich 06:00 bis 23:59 mit 2 Tagen und Abgleich beim Öffnen, PDF-Import (Parser, Server, pdf.js, Vorschau mit Warnung). check und 467 Tests grün, Browserprüfung lokal (Depot, PDF gut und falsch).
+Remote: investment_entries ist leer (kein Eintrag 3175 vorhanden), investStart = 2026-11-14 wird nicht mehr gerechnet. Nicht veröffentlicht.
+Offen: Deploy durch den anderen Agenten; Besitzer trägt Startbestand (und ggf. Kürzel, Anteile) ein; echtes Revolut-PDF testen.

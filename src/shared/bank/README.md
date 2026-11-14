@@ -62,3 +62,12 @@ const rule = learnRule(row.description, "Lebensmittel");   // null, wenn kein H�
 - **Fremdwährung**: ohne Kurs ist `amountChf` gleich dem Originalbetrag, `chfEstimated: true` und eine Warnung.
 - **Mahlzeit**: Kategorie "Gastronomie" und mindestens 10 Franken; das Feld `isMeal` auf der Buchung (oder in der Regel) übersteuert. Eingänge, deren Text den `payerName` enthält, gelten nie als Einkommen und gehen an die älteste offene Mahlzeit (bis 3 Tage Vorlauf).
 - **monthSummary**: Hochrechnung linear aus dem Tagesschnitt bis "heute" (`opts.today`, sonst jüngste Buchung); abgeschlossene Monate werden nicht hochgerechnet. "Sparen/Anlage" und interne Überweisungen zählen nicht als Ausgabe.
+
+## PDF-Kontoauszug (pdf.ts)
+
+Im Browser liest pdf.js die Textstücke mit Position; `groupLines(items)` macht Zeilen (gleiche y-Lage) und Zellen (Lücke in x), `parsePdf(lines)` liefert ein `ParseResult` wie `parseExport` (gleiche `Buchung`, Hash, Konto), dazu `uncertain`, `warnings` und `stats`.
+- Datum: `01.10.2026`, `1. Okt. 2026`, `01 Oct 2026`, `Oct 1, 2026`, ISO. Beträge brauchen zwei Nachkommastellen, sonst sind es Referenznummern.
+- Vorzeichen aus den Spalten Ausgehend/Eingehend (Money out/in, Belastung/Gutschrift), sonst aus dem eigenen Vorzeichen, sonst aus der Saldo-Differenz. Neueste zuerst wird an der Saldo-Kette erkannt und gedreht.
+- `uncertain > 0` bei falscher Saldo-Kette, weniger als 80 Prozent erkannter Datumszeilen oder unsicherem Vorzeichen: Warnung, und der Server speichert nur mit `confirmed` (POST /api/import/commit mit `pdf`).
+- `pdfText(lines)` gibt den erkannten Text mit x-Lagen zum Kopieren aus. `rowsToResult` setzt auf dem Server Hash und Konto neu.
+- Nur mit erfundenen Zeilen und selbst erzeugten PDFs geprüft; ein echtes Revolut-PDF fehlt noch.

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { registerSW } from "virtual:pwa-register";
 import { App } from "./App";
+import { api } from "./api";
 import "./styles.css";
 
 // Sofortige Rückmeldung beim Drücken: pointerdown setzt data-down (CSS: scale .97), nie erst beim Loslassen.
@@ -39,5 +40,8 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+// Beim Öffnen: Fitbit abgleichen, wenn der letzte Abgleich älter als 30 Minuten ist (der Server entscheidet).
+api.health.syncIfStale().then((r) => { if (r.ran) void queryClient.invalidateQueries({ queryKey: ["health"] }); }).catch(() => {});
 
 if (import.meta.env.PROD) registerSW({ immediate: true });

@@ -9,7 +9,7 @@ import { v, type AppEnv } from "../util";
 import { pkceChallenge, randomUrlSafe } from "./crypto";
 import { credentialInfo, deleteCredentials, saveCredentials, withCredentials, type CredentialInfo } from "./credentials";
 import { SCOPES } from "./google";
-import { PROVIDER, KIND, disconnectHealth, saveConnection, syncHealth } from "./sync";
+import { PROVIDER, KIND, disconnectHealth, saveConnection, syncHealth, syncIfStale } from "./sync";
 import { HealthError, type HealthEnv } from "./types";
 
 const { healthConnection, healthOauthState, healthWorkouts, syncRuns, settings } = schema;
@@ -148,6 +148,9 @@ export function registerHealth(api: Hono<AppEnv>) {
     const r = await syncHealth(c.env as HealthEnv);
     return c.json(r, r.connected ? 200 : 409);
   });
+
+  // Beim Start der App: gleicht nur ab, wenn der letzte Lauf mindestens 30 Minuten her ist.
+  api.post("/fitbit/sync-if-stale", async (c) => c.json(await syncIfStale(c.env as HealthEnv)));
 
   api.delete("/fitbit/connection", async (c) => c.json({ ok: await disconnectHealth(c.env as HealthEnv) }));
 

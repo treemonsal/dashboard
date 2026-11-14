@@ -12,7 +12,13 @@ import { HealthError, type DayValues, type HealthEnv, type HealthProvider, type 
 export const PROVIDER = googleHealth;
 export const KIND = "fitbit";
 export const FIRST_DAYS = 30;
-export const NIGHTLY_DAYS = 3;
+/** Tage, die ein regelmässiger Abgleich liest (Cron und Öffnen der App). */
+export const NIGHTLY_DAYS = 2;
+/** Abstand zwischen zwei Abgleichen: stündlich; nach einem Fehler und beim Öffnen frühestens nach 30 Minuten. */
+export const REGULAR_MIN = 55;
+export const RETRY_MIN = 30;
+/** Cron: stündlich ab dieser Zürcher Stunde bis 23:59. */
+export const FIRST_HOUR = 6;
 const SLACK_MS = 60_000;
 const BATCH = 40;
 
@@ -171,19 +177,37 @@ export async function disconnectHealth(rawEnv: HealthEnv, deps: { fetcher?: type
   return true;
 }
 
-/** Soll der Cron jetzt abgleichen? Einmal pro Zürcher Tag ab 08:00 (nach dem Aufstehen), nach einem Fehler stündlich wieder. */
+/**
+ * Soll der Cron jetzt abgleichen? Stündlich von 06:00 bis 23:59 Zürcher Zeit (Cron läuft alle 5 Minuten, daher 55 Minuten Abstand).
+ * Nach einem Fehler frühestens nach 30 Minuten wieder. Google erlaubt 300 Anfragen pro Minute und Nutzer
+ * (https://developers.google.com/health/rate-limits); ein Abgleich braucht rund zehn, also etwa 180 pro Tag.
+ */
 export async function dueNow(env: HealthEnv, now: Date = new Date()): Promise<boolean> {
   const db: Db = drizzle(env.DB, { schema });
   const conn = await db.select({ id: healthConnection.id }).from(healthConnection).where(eq(healthConnection.id, PROVIDER.id)).get();
   if (!conn) return false;
   const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Zurich", hour: "2-digit", hourCycle: "h23" }).format(now));
-  if (hour < 8) return false;
+  if (hour < FIRST_HOUR) return false;
   const last = await db.select().from(syncRuns).where(eq(syncRuns.kind, KIND)).orderBy(desc(syncRuns.at)).limit(1).get();
   if (!last) return true;
-  if (!last.ok) return now.getTime() - Date.parse(last.at) >= 55 * 60_000;
-  return todayInZone(new Date(last.at)) !== todayInZone(now);
+  return now.getTime() - Date.parse(last.at) >= (last.ok ? REGULAR_MIN : RETRY_MIN) * 60_000;
+}
+
+/** Beim Öffnen der App: abgleichen, wenn der letzte Lauf (auch ein fehlgeschlagener) mindestens 30 Minuten her ist. */
+export async function staleNow(env: HealthEnv, now: Date = new Date()): Promise<boolean> {
+  const db: Db = drizzle(env.DB, { schema });
+  const conn = await db.select({ id: healthConnection.id }).from(healthConnection).where(eq(healthConnection.id, PROVIDER.id)).get();
+  if (!conn) return false;
+  const last = await db.select().from(syncRuns).where(eq(syncRuns.kind, KIND)).orderBy(desc(syncRuns.at)).limit(1).get();
+  return !last || now.getTime() - Date.parse(last.at) >= RETRY_MIN * 60_000;
 }
 
 export async function runHealthIfDue(env: HealthEnv, now: Date = new Date()): Promise<void> {
   if (await dueNow(env, now)) await syncHealth(env, { now });
+}
+
+export async function syncIfStale(env: HealthEnv, now: Date = new Date()): Promise<{ ran: boolean; ok?: boolean }> {
+  if (!(await staleNow(env, now))) return { ran: false };
+  const r = await syncHealth(env, { now });
+  return { ran: true, ok: r.ok };
 }

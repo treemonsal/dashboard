@@ -4,13 +4,23 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import * as schema from "./db/schema";
 import {
   CAT, DEFAULT_RULES, applyCategories, dedupe, isMeal, learnRule, markInternalTransfers, mealShares, parseExport, parseWithMapping,
-  type Buchung, type ParseResult, type Rule,
+  rowsToResult, type Bank, type Buchung, type ParseResult, type Rule,
 } from "../shared/bank";
 import type { ImportFilePreview, ImportPreview, ImportResult } from "../shared/schemas";
 import { batch, newId, nowIso, type Db } from "./util";
 
 const t = schema;
-type FileIn = { name: string; text: string; mapping?: Record<string, unknown> };
+export interface PdfIn {
+  bank: Bank;
+  account?: string;
+  uncertain?: number;
+  confirmed?: boolean;
+  rows: { date: string; description: string; amount: number; currency: string; amountChf: number; balance?: number; chfEstimated?: boolean }[];
+}
+type FileIn = { name: string; text?: string; mapping?: Record<string, unknown>; pdf?: PdfIn };
+
+/** Unsichere PDF-Dateien speichert nur, wer sie bestätigt hat. */
+export const unconfirmedPdf = (files: FileIn[]) => files.some((f) => f.pdf && (f.pdf.uncertain ?? 0) > 0 && !f.pdf.confirmed);
 
 async function loadRules(db: Db): Promise<Rule[]> {
   const rows = await db.select().from(t.categoryRules);
@@ -20,7 +30,9 @@ async function loadRules(db: Db): Promise<Rule[]> {
 }
 
 function readFile(f: FileIn): ParseResult {
-  return f.mapping ? parseWithMapping(f.text, f.mapping, { fileName: f.name }) : parseExport(f.text, f.name);
+  if (f.pdf) return rowsToResult(f.pdf);
+  const text = f.text ?? "";
+  return f.mapping ? parseWithMapping(text, f.mapping, { fileName: f.name }) : parseExport(text, f.name);
 }
 
 /** Liest alle Dateien und trennt neue von bereits vorhandenen Buchungen (auch zwischen den Dateien dieses Uploads). */

@@ -1,11 +1,23 @@
 // Dünne Hülle um die eigene API. Typen kommen aus src/shared.
 import type * as S from "../shared/schemas";
 
+export interface PdfFileIn {
+  bank: "revolut" | "zkb" | "yuh" | "unbekannt";
+  account?: string;
+  uncertain: number;
+  confirmed: boolean;
+  rows: { date: string; description: string; amount: number; currency: string; amountChf: number; balance?: number; chfEstimated?: boolean }[];
+}
 export interface ImportFileIn {
   name: string;
   text: string;
   mapping?: NonNullable<S.ImportFilePreview["mapping"]>;
+  /** PDF: im Browser gelesene Buchungen */
+  pdf?: PdfFileIn;
+  /** Nur Oberfläche, geht nicht an den Server */
+  pdfInfo?: { warnings: string[]; dated: number; recognized: number; text: string };
 }
+const wire = (files: ImportFileIn[]) => files.map(({ name, text, mapping, pdf }) => ({ name, text, ...(mapping ? { mapping } : {}), ...(pdf ? { pdf } : {}) }));
 
 export interface ConnectorGrant {
   id: string;
@@ -103,12 +115,13 @@ export const api = {
     depotRefresh: () => post<{ ok: boolean; message: string; added: number }>("/depot/refresh", {}),
   },
   health: {
+    syncIfStale: () => post<{ ran: boolean; ok?: boolean }>("/fitbit/sync-if-stale", {}),
     list: (from: string, to: string) => get<S.HealthDay[]>(`/health?from=${from}&to=${to}`),
     put: (day: string, b: S.HealthUpsert) => put<S.HealthDay>(`/health/${day}`, b),
   },
   bank: {
-    preview: (files: ImportFileIn[]) => post<S.ImportPreview>("/import/preview", { files }),
-    commit: (files: ImportFileIn[]) => post<S.ImportResult>("/import/commit", { files }),
+    preview: (files: ImportFileIn[]) => post<S.ImportPreview>("/import/preview", { files: wire(files) }),
+    commit: (files: ImportFileIn[]) => post<S.ImportResult>("/import/commit", { files: wire(files) }),
   },
   timetable: { get: () => get<{ lessons: S.TimetableLesson[] }>("/timetable") },
   calendar: {

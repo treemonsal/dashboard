@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
 import * as schema from "../../src/server/db/schema";
 import { decryptToken, encryptToken, pkceChallenge } from "../../src/server/health/crypto";
-import { PROVIDER, disconnectHealth, dueNow, saveConnection, syncHealth } from "../../src/server/health/sync";
+import { PROVIDER, disconnectHealth, dueNow, saveConnection, staleNow, syncHealth } from "../../src/server/health/sync";
 import type { HealthEnv } from "../../src/server/health/types";
 import { fakeGoogle, j } from "./fake";
 
@@ -61,7 +61,7 @@ describe("Abgleich", () => {
     expect(run.message).not.toMatch(/refresh|access|geheim/i);
   });
 
-  it("erster Abgleich lädt 30 Tage nach, danach 3; zweiter Lauf ist idempotent", async () => {
+  it("erster Abgleich lädt 30 Tage nach, danach 2; zweiter Lauf ist idempotent", async () => {
     await connect();
     const g = fakeGoogle();
     await syncHealth(e, { fetcher: g.fetcher, now: NOW });
@@ -75,7 +75,7 @@ describe("Abgleich", () => {
 
     const g2 = fakeGoogle();
     await syncHealth(e, { fetcher: g2.fetcher, now: NOW });
-    expect(g2.calls.find((c) => c.url.pathname.includes("/weight/"))!.url.searchParams.get("filter")).toBe('weight.sample_time.civil_time >= "2026-11-12" AND weight.sample_time.civil_time < "2026-11-15"');
+    expect(g2.calls.find((c) => c.url.pathname.includes("/weight/"))!.url.searchParams.get("filter")).toBe('weight.sample_time.civil_time >= "2026-11-13" AND weight.sample_time.civil_time < "2026-11-15"');
     expect((await db.select().from(schema.healthDaily).all()).length).toBe(3);
     expect((await db.select().from(schema.healthWorkouts).all()).length).toBe(2);
     expect(await runs()).toHaveLength(2);
@@ -231,18 +231,30 @@ describe("Trennen", () => {
 describe("Zeitpunkt für den Cron", () => {
   const at = (iso: string) => new Date(iso);
   it("nicht verbunden: nie", async () => expect(await dueNow(e, at("2026-11-14T09:00:00Z"))).toBe(false));
-  it("vor 08:00 Zürich nicht, danach einmal pro Tag", async () => {
+  it("vor 06:00 Zürich nicht, danach stündlich bis 23:59", async () => {
     await connect();
-    expect(await dueNow(e, at("2026-11-14T06:30:00Z"))).toBe(false); // 07:30
-    expect(await dueNow(e, at("2026-11-14T07:00:00Z"))).toBe(true); // 08:00
-    await db.insert(schema.syncRuns).values({ id: "r1", kind: "fitbit", ok: true, at: "2026-11-14T07:05:00.000Z" });
-    expect(await dueNow(e, at("2026-11-14T15:00:00Z"))).toBe(false);
-    expect(await dueNow(e, at("2026-11-15T07:00:00Z"))).toBe(true);
+    expect(await dueNow(e, at("2026-11-14T04:30:00Z"))).toBe(false); // 05:30
+    expect(await dueNow(e, at("2026-11-14T05:00:00Z"))).toBe(true); // 06:00
+    await db.insert(schema.syncRuns).values({ id: "r1", kind: "fitbit", ok: true, at: "2026-11-14T05:05:00.000Z" });
+    expect(await dueNow(e, at("2026-11-14T05:40:00Z"))).toBe(false);
+    expect(await dueNow(e, at("2026-11-14T06:00:00Z"))).toBe(true); // 55 Minuten später
+    expect(await dueNow(e, at("2026-11-14T22:30:00Z"))).toBe(true); // 23:30
+    expect(await dueNow(e, at("2026-11-14T23:30:00Z"))).toBe(false); // 00:30 am nächsten Tag
   });
-  it("nach einem Fehler nach etwa einer Stunde wieder", async () => {
+  it("nach einem Fehler frühestens nach 30 Minuten wieder", async () => {
     await connect();
     await db.insert(schema.syncRuns).values({ id: "r2", kind: "fitbit", ok: false, at: "2026-11-14T07:05:00.000Z" });
-    expect(await dueNow(e, at("2026-11-14T07:40:00Z"))).toBe(false);
-    expect(await dueNow(e, at("2026-11-14T08:06:00Z"))).toBe(true);
+    expect(await dueNow(e, at("2026-11-14T07:25:00Z"))).toBe(false);
+    expect(await dueNow(e, at("2026-11-14T07:36:00Z"))).toBe(true);
+  });
+  it("beim Öffnen der App: nur wenn der letzte Lauf mindestens 30 Minuten her ist, auch nach Fehler", async () => {
+    expect(await staleNow(e, at("2026-11-14T09:00:00Z"))).toBe(false); // nicht verbunden
+    await connect();
+    expect(await staleNow(e, at("2026-11-14T09:00:00Z"))).toBe(true); // noch nie
+    await db.insert(schema.syncRuns).values({ id: "r3", kind: "fitbit", ok: true, at: "2026-11-14T09:00:00.000Z" });
+    expect(await staleNow(e, at("2026-11-14T09:20:00Z"))).toBe(false);
+    expect(await staleNow(e, at("2026-11-14T09:31:00Z"))).toBe(true);
+    await db.insert(schema.syncRuns).values({ id: "r4", kind: "fitbit", ok: false, at: "2026-11-14T09:40:00.000Z" });
+    expect(await staleNow(e, at("2026-11-14T09:55:00Z"))).toBe(false);
   });
 });
