@@ -145,3 +145,17 @@ describe("Abgleiche", () => {
     expect((await call("GET", "/api/sync-runs?kind=schule")).data).toEqual([]);
   });
 });
+
+describe("Fächer: zählt zum Schnitt", () => {
+  it("Standard wahr, umschaltbar, unbekannte Id 404, nur counts erlaubt", async () => {
+    const list = await call<{ id: string; counts: boolean }[]>("GET", "/api/subjects");
+    expect(list.data.find((s) => s.id === "s-e")?.counts).toBe(true);
+    const off = await call<{ counts: boolean }>("PATCH", "/api/subjects/s-e", { counts: false });
+    expect(off.status).toBe(200);
+    expect(off.data.counts).toBe(false);
+    expect((await call<{ id: string; counts: boolean }[]>("GET", "/api/subjects")).data.find((s) => s.id === "s-e")?.counts).toBe(false);
+    expect((await call("PATCH", "/api/subjects/s-e", { counts: true })).status).toBe(200);
+    expect((await call("PATCH", "/api/subjects/nope", { counts: false })).status).toBe(404);
+    expect((await call("PATCH", "/api/subjects/s-e", { code: "X" })).status).toBe(400);
+  });
+});

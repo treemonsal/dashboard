@@ -57,12 +57,17 @@ Eine Oberfläche dafür gibt es noch nicht (gehört nicht zu diesem Auftrag).
 |---|---|
 | `tasks` | `today_overview`, `list_tasks`, `add_task`, `update_task`, `complete_task` |
 | `calendar` | `list_events` |
-| `school` | `list_exams`, `add_exam`, `set_exam_topics`, `list_grades`, `add_grade`, `grade_summary` |
+| `school` | `list_exams`, `add_exam`, `set_exam_topics`, `list_grades`, `add_grade`, `grade_summary`, `get_timetable`, `set_timetable` |
 | `gym` | `gym_week`, `log_workout` |
 | `money:read` | `money_summary` (nur Zusammenfassung, keine Einzelbuchungen) |
 | `health:read` | `health_summary` (nur Zusammenfassung) |
+| `notify` | `notify` (Mitteilung aufs Handy: Titel höchstens 60, Text höchstens 180 Zeichen, höchstens 10 pro Tag, Antippen öffnet Ziele) |
 
-Kein Werkzeug löscht. Ein Client sieht nur die Werkzeuge, deren Recht du erlaubt hast. `today_overview` zeigt nur die Bereiche, für die das Token Rechte hat. Access-Tokens gelten 30 Minuten, Refresh-Tokens rotieren und verfallen nach 30 Tagen ohne Nutzung.
+Kein Werkzeug löscht; `set_timetable` ersetzt den ganzen Stundenplan durch die übergebene Liste (höchstens 80 Lektionen, ungültige Eingabe ersetzt nichts, leere Liste wird abgelehnt). `grade_summary` lässt Fächer, die in der App auf „zählt nicht zum Schnitt“ stehen, aus Schnitt und Ziel heraus und zeigt sie getrennt unter `notCounted`. Ein Client sieht nur die Werkzeuge, deren Recht du erlaubt hast. `today_overview` zeigt nur die Bereiche, für die das Token Rechte hat. Access-Tokens gelten 30 Minuten, Refresh-Tokens rotieren und verfallen nach 30 Tagen ohne Nutzung.
+
+## Bestehende Verbindungen: neu verbinden?
+
+Nur für `notify`. Die Rechte eines Zugriffs werden beim Verbinden auf der Zustimmungsseite festgelegt und bleiben danach fest (auch ein Refresh erweitert sie nicht, getestet in `test/mcp/tools.test.ts`). Eine App, die vor dieser Version verbunden wurde, hat das Recht `notify` nicht und sieht das Werkzeug nicht: trenne sie unter Einstellungen, Verbundene Apps (oder in Claude beim Connector) und verbinde sie neu, dann taucht `notify` als Haken auf der Zustimmungsseite auf. `get_timetable` und `set_timetable` brauchen kein neues Recht, sie hängen an `school`: eine bestehende Verbindung mit `school` bekommt sie ohne Neuverbinden, sobald die App ihre Werkzeugliste neu lädt (neue Unterhaltung bzw. Connector kurz aus- und einschalten; ob die echte Claude-App die Liste selber auffrischt, ist nicht geprüft).
 
 ## Anleitung: in Claude verbinden
 

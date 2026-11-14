@@ -34,7 +34,22 @@ export function neededGrade(gs: Pick<Grade, "value" | "weight">[], target: numbe
   return { kind: "need", value: x };
 }
 
-/** Zeugnisnote: auf halbe Noten gerundet. */
+/** Zeugnisnote: kaufmännisch auf halbe Noten gerundet (3.25 wird 3.5, 3.75 wird 4, 3.24 bleibt 3). */
 export function roundHalf(x: number): number {
-  return Math.round(x * 2) / 2;
+  return Math.floor(x * 2 + 0.5 + 1e-9) / 2;
+}
+
+/** Beide Zahlen eines Fachs: genau (fürs Ziel) und Zeugnis (gerundet). null ohne Noten. */
+export function subjectMarks(avg: number | null): { exact: number; certificate: number } | null {
+  return avg === null ? null : { exact: avg, certificate: roundHalf(avg) };
+}
+
+/** Fächer, die nicht zählen (counts = false), bleiben aus Schnitt, Ziel und "kein Fach unter 4" draussen. */
+export function onlyCounting<T extends { counts: boolean }>(rows: T[]): T[] {
+  return rows.filter((r) => r.counts);
+}
+
+/** Gesamtschnitt über die zählenden Fächer. */
+export function countingAverage(rows: { counts: boolean; avg: number | null }[]): number | null {
+  return overallAverage(onlyCounting(rows).map((r) => r.avg));
 }

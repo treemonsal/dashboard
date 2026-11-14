@@ -52,7 +52,8 @@ export const taskQuery = z.object({
 });
 
 /* ---------- Fächer ---------- */
-export const subjectCreate = z.object({ id: id.optional(), code: text(20), name: optText(120), sortOrder: z.number().int().optional() });
+export const subjectCreate = z.object({ id: id.optional(), code: text(20), name: optText(120), sortOrder: z.number().int().optional(), counts: z.boolean().optional() });
+export const subjectUpdate = z.object({ counts: z.boolean() }).strict();
 
 /* ---------- Prüfungen ---------- */
 export const examStatus = z.enum(["bestaetigt", "unbestaetigt"]);
@@ -154,11 +155,50 @@ export const settingsUpdate = z
     investStart: z.union([isoDate, z.literal("")]),
     mamaName: z.string().trim().max(60),
     hideHomework: z.enum(["0", "1"]),
+    schoolHolidayUntil: z.union([isoDate, z.literal("")]),
   })
   .partial()
   .strict();
 export type { Settings } from "./settings";
 export { SETTING_DEFAULTS } from "./settings";
+
+/* ---------- Stundenplan ---------- */
+export const MAX_LESSONS = 80;
+export const lessonWrite = z
+  .object({
+    weekday: z.number().int().min(1).max(7),
+    startTime: clockTime,
+    endTime: clockTime,
+    subject: text(20),
+    room: z.string().trim().max(40).nullish().transform((x) => x || null),
+    teacher: z.string().trim().max(80).nullish().transform((x) => x || null),
+    validFrom: isoDate.nullish().transform((x) => x ?? null),
+  })
+  .strict()
+  .refine((l) => l.startTime < l.endTime, { message: "Ende muss nach dem Beginn liegen", path: ["endTime"] });
+/** Vollständiger Stundenplan. Doppelte Lektionen (gleicher Tag, Beginn, Ende, Fach, gültig ab) sind ein Fehler. */
+export const timetableReplace = z
+  .object({ lessons: z.array(lessonWrite).max(MAX_LESSONS) })
+  .strict()
+  .superRefine((v, ctx) => {
+    const seen = new Set<string>();
+    v.lessons.forEach((l, i) => {
+      const k = [l.weekday, l.startTime, l.endTime, l.subject.toLowerCase(), l.validFrom ?? ""].join("|");
+      if (seen.has(k)) ctx.addIssue({ code: "custom", message: "Doppelte Lektion", path: ["lessons", i] });
+      seen.add(k);
+    });
+  });
+export type LessonWrite = z.input<typeof lessonWrite>;
+export interface TimetableLesson {
+  id: string;
+  weekday: number;
+  startTime: string;
+  endTime: string;
+  subject: string;
+  room: string | null;
+  teacher: string | null;
+  validFrom: string | null;
+}
 
 /* ---------- Lernplan ---------- */
 export const studyPlanRequest = z.object({ replace: z.boolean().optional(), blockMin: z.number().int().min(10).max(240).optional() });
@@ -305,6 +345,8 @@ export interface Subject extends Stamped {
   code: string;
   name: string | null;
   sortOrder: number;
+  /** false: Noten nur zur Information, zählen weder zum Schnitt noch zum Zeugnis */
+  counts: boolean;
 }
 
 export interface ExamTopic extends Stamped {
@@ -393,6 +435,7 @@ export type ExamCreate = z.input<typeof examCreate>;
 export type ExamUpdate = z.input<typeof examUpdate>;
 export type ExamTopicCreate = z.input<typeof examTopicCreate>;
 export type ExamTopicUpdate = z.input<typeof examTopicUpdate>;
+export type SubjectUpdate = z.input<typeof subjectUpdate>;
 export type GradeCreate = z.input<typeof gradeCreate>;
 export type GradeUpdate = z.input<typeof gradeUpdate>;
 export type ProjectCreate = z.input<typeof projectCreate>;

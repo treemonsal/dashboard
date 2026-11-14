@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseQuick } from "../src/shared/parse";
-import { neededGrade, overallAverage, weightedAverage } from "../src/shared/calc";
+import { countingAverage, neededGrade, onlyCounting, overallAverage, roundHalf, subjectMarks, weightedAverage } from "../src/shared/calc";
 import { planStudyBlocks } from "../src/shared/lernplan";
 
 const today = "2026-11-13"; // Freitag
@@ -49,6 +49,40 @@ describe("Notenrechner", () => {
     expect(neededGrade(gs, 5.5, 1)).toMatchObject({ kind: "impossible" });
     expect(neededGrade([], 4.5, 1)).toEqual({ kind: "need", value: 4.5 });
     expect(neededGrade(gs, 5, 2)).toEqual({ kind: "need", value: 5.5 });
+  });
+});
+
+describe("Zeugnisnote", () => {
+  it("rundet kaufmännisch auf halbe Noten, Grenzfälle x.25 und x.75 runden auf", () => {
+    expect(roundHalf(3.25)).toBe(3.5);
+    expect(roundHalf(3.75)).toBe(4);
+    expect(roundHalf(4.25)).toBe(4.5);
+    expect(roundHalf(4.75)).toBe(5);
+    expect(roundHalf(3.24)).toBe(3);
+    expect(roundHalf(3.74)).toBe(3.5);
+    expect(roundHalf(3.5)).toBe(3.5);
+    expect(roundHalf(4)).toBe(4);
+    expect(roundHalf(5.99)).toBe(6);
+    expect(roundHalf(1)).toBe(1);
+  });
+  it("liefert genau und Zeugnis nebeneinander", () => {
+    expect(subjectMarks(3.25)).toEqual({ exact: 3.25, certificate: 3.5 });
+    expect(subjectMarks(4.5)).toEqual({ exact: 4.5, certificate: 4.5 });
+    expect(subjectMarks(null)).toBeNull();
+  });
+});
+
+describe("Fächer, die nicht zählen", () => {
+  const rows = [
+    { counts: true, avg: 4 as number | null },
+    { counts: true, avg: 5 as number | null },
+    { counts: false, avg: 2 as number | null },
+    { counts: true, avg: null as number | null },
+  ];
+  it("lässt sie aus dem Gesamtschnitt heraus", () => {
+    expect(countingAverage(rows)).toBe(4.5);
+    expect(onlyCounting(rows)).toHaveLength(3);
+    expect(countingAverage([{ counts: false, avg: 2 }])).toBeNull();
   });
 });
 

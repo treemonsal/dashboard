@@ -16,6 +16,8 @@ export type Settings = {
   mamaName: string;
   /** "1" = Einträge, die mit "Hausaufgabe" beginnen, im Kalender ausblenden */
   hideHomework: string;
+  /** Schulferien: bis und mit diesem Datum (YYYY-MM-DD) erscheinen keine Lektionen. Leer = keine Ferien. */
+  schoolHolidayUntil: string;
 };
-export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "4", salary: "650", investMonthly: "350", investStart: "", mamaName: "", hideHomework: "1" };
+export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "4", salary: "650", investMonthly: "350", investStart: "", mamaName: "", hideHomework: "1", schoolHolidayUntil: "" };
 

@@ -4,11 +4,12 @@ import { addDays, clockOf, dayCompact, minutesOf, mondayOf, weekdayNum } from ".
 import { eventsOnDay, lastDayOf, type DayEvent } from "../shared/agenda";
 import type { CalendarEvent, Exam, Task } from "../shared/schemas";
 import { CheckMark, DetailHead, Icon } from "./ui";
+import type { LessonBlock } from "../shared/stundenplan";
 import { useSheet } from "./sheet";
 import { useSuggest } from "./suggest";
 import type { Suggestion } from "../shared/vorschlag";
 import { ExamSheet, TaskLine, TrainingSheet } from "./sheets";
-import { useEvents, useExams, useGymDays, useGymPlans, useTasks, useToday } from "./queries";
+import { useEvents, useExams, useGymDays, useGymPlans, useSubjects, useTasks, useTimetable, useToday } from "./queries";
 
 /** Zeile eines Termins im Tagesplan: gedämpft, ohne Abhak-Kreis, antippbar. */
 export function EventRow({ d, day }: { d: DayEvent; day: string }) {
@@ -28,6 +29,36 @@ export function EventRow({ d, day }: { d: DayEvent; day: string }) {
   );
 }
 
+/** Zeile einer Lektion (Block) im Tagesplan: wie ein Termin gedämpft, ohne Abhak-Kreis. */
+export function LessonRow({ b, day }: { b: LessonBlock; day: string }) {
+  const sheet = useSheet();
+  const name = useSubjects().data?.find((s) => s.code === b.subject)?.name;
+  const sub = [`bis ${clockOf(b.endMin)}`, b.room].filter(Boolean).join(" · ");
+  return (
+    <button type="button" className="slot event lesson press" onClick={() => sheet.open(<LessonSheet b={b} name={name ?? null} day={day} />)}>
+      <span className="t">{clockOf(b.startMin)}</span>
+      <span className="dot" />
+      <span className="w">
+        <b>{b.subject}</b>
+        <span>{sub}</span>
+      </span>
+      <span />
+    </button>
+  );
+}
+
+export function LessonSheet({ b, name, day }: { b: LessonBlock; name: string | null; day: string }) {
+  return (
+    <div>
+      <h3>{name ? `${name} (${b.subject})` : b.subject}</h3>
+      <div className="when">{dayCompact(day)}, {clockOf(b.startMin)}–{clockOf(b.endMin)}</div>
+      {b.room && <div className="field"><span>Zimmer</span><span>{b.room}</span></div>}
+      {b.teacher && <div className="field"><span>Lehrperson</span><span style={{ textAlign: "right", overflowWrap: "anywhere" }}>{b.teacher}</span></div>}
+      {b.lessons > 1 && <div className="legend" style={{ marginTop: 16 }}>{b.lessons} Lektionen</div>}
+    </div>
+  );
+}
+
 interface Item {
   key: string;
   at: number;
@@ -35,8 +66,9 @@ interface Item {
 }
 
 /** Aufgaben, Termine und Prüfungen eines Tages in einer Reihenfolge: ganztägig, nach Uhrzeit, dann ohne Uhrzeit. */
-export function dayItems(o: { day: string; tasks: Task[]; events: CalendarEvent[]; exams?: Exam[]; taskToday?: string; suggest?: Map<string, Suggestion> }): ReactNode[] {
+export function dayItems(o: { day: string; tasks: Task[]; events: CalendarEvent[]; exams?: Exam[]; taskToday?: string; suggest?: Map<string, Suggestion>; lessons?: LessonBlock[] }): ReactNode[] {
   const items: Item[] = [];
+  for (const b of o.lessons ?? []) items.push({ key: `l:${b.startMin}:${b.subject}`, at: b.startMin, el: <LessonRow b={b} day={o.day} /> });
   for (const d of eventsOnDay(o.events, o.day)) {
     items.push({ key: `e:${d.event.id}`, at: d.allDay ? -2 : (d.startMin ?? 0), el: <EventRow d={d} day={o.day} /> });
   }
@@ -131,6 +163,7 @@ export function Woche() {
   const ev = useEvents(from, addDays(from, 6));
   const sheet = useSheet();
   const suggest = useSuggest();
+  const tt = useTimetable();
 
   return (
     <div className="view">
@@ -153,7 +186,7 @@ export function Woche() {
         const plan = plans.find((p) => p.weekdays.includes(weekdayNum(day)));
         const trainingDone = gym.done.has(day);
         const dayExams = exams.filter((x) => x.date === day);
-        const items = dayItems({ day, tasks: dayTasks, events: ev.events, exams: dayExams, suggest: suggest(day, dayTasks, ev.events, today) });
+        const items = dayItems({ day, tasks: dayTasks, events: ev.events, exams: dayExams, lessons: tt.on(day), suggest: suggest(day, dayTasks, ev.events, today) });
         const missed = !!plan && !trainingDone && day < today;
         const training = (plan || trainingDone) && (
           <button type="button" className={`slot press ${trainingDone ? "done" : ""} ${missed ? "missed" : ""}`} onClick={() => sheet.open(<TrainingSheet day={day} />)}>

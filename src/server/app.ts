@@ -23,6 +23,7 @@ import {
   projectCreate,
   projectUpdate,
   subjectCreate,
+  subjectUpdate,
   syncRunQuery,
   taskCreate,
   taskQuery,
@@ -222,6 +223,10 @@ export function createApp() {
 
   /* ---------- Fächer ---------- */
   api.get("/subjects", async (c) => c.json(await c.var.db.select().from(subjects).orderBy(asc(subjects.sortOrder), asc(subjects.code))));
+  api.patch("/subjects/:id", v("param", idParam), v("json", subjectUpdate), async (c) => {
+    const row = await c.var.db.update(subjects).set({ counts: c.req.valid("json").counts, updatedAt: nowIso() }).where(eq(subjects.id, c.req.valid("param").id)).returning().get();
+    return row ? c.json(row) : notFound(c);
+  });
   api.post("/subjects", v("json", subjectCreate), async (c) => {
     const b = c.req.valid("json");
     return c.json(await c.var.db.insert(subjects).values({ ...b, id: b.id ?? newId() }).returning().get(), 201);

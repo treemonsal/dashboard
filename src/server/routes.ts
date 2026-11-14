@@ -33,6 +33,7 @@ import { todayInZone, weekdayNum } from "../shared/dates";
 import { commitImport, learnFromCorrection, previewImport, recompute } from "./bankimport";
 import { registerCalendar } from "./calendar";
 import { registerPush } from "./push";
+import { registerTimetable } from "./timetable";
 import { registerHealth } from "./health/routes";
 import { batch, idParam, newId, nowIso, notFound, v, type AppEnv, type Db } from "./util";
 
@@ -94,6 +95,7 @@ async function mealDefault(db: Db, categoryId: string | null | undefined, explic
 export function registerExtra(api: Hono<AppEnv>) {
   registerCalendar(api);
   registerPush(api);
+  registerTimetable(api);
   registerHealth(api);
 
   /* ---------- Einstellungen ---------- */
@@ -123,6 +125,7 @@ export function registerExtra(api: Hono<AppEnv>) {
       tasks: await db.select().from(t.tasks),
       taskEvents: await db.select().from(t.taskEvents),
       subjects: await db.select().from(t.subjects),
+      timetable: await db.select().from(t.timetable),
       exams: await db.select().from(t.exams),
       examTopics: await db.select().from(t.examTopics),
       grades: await db.select().from(t.grades),

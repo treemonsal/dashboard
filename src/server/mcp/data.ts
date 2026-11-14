@@ -3,13 +3,16 @@
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, like, lte, or, sql, type SQL } from "drizzle-orm";
 import * as t from "../db/schema";
 import { SETTING_DEFAULTS, type Settings } from "../../shared/settings";
-import { MIN_SUBJECT, TARGET_AVERAGE, neededGrade, overallAverage, weightedAverage, type Needed } from "../../shared/calc";
+import { MIN_SUBJECT, TARGET_AVERAGE, neededGrade, overallAverage, subjectMarks, weightedAverage, type Needed } from "../../shared/calc";
 import { budgetOf, byCategory, depositTotal, mamaBalance, monthSummary } from "../../shared/geld";
 import { addDays, daysUntil, mondayOf, timeInZone, todayInZone, weekdayLong, weekdayNum, zoneMidnightUtc } from "../../shared/dates";
 import { newId, nowIso, type Db } from "../util";
 import { visibleEvents } from "../../shared/agenda";
 import { nextDue } from "../../shared/recurrence";
-import type { CalendarEvent } from "../../shared/schemas";
+import { timetableReplace, type CalendarEvent } from "../../shared/schemas";
+import { getTimetable, replaceTimetable } from "../timetable";
+import { pushToAll, vapidFrom, type PushDeps } from "../push";
+import type { Bindings } from "../util";
 
 /** Fehler, die als Werkzeug-Fehler (isError) an das Modell gehen, nicht als Serverfehler. */
 export class ToolInputError extends Error {}
@@ -270,13 +273,28 @@ function neededText(n: Needed | null): string {
 export async function gradeSummary(db: Db) {
   const subjects = await db.select().from(t.subjects).orderBy(asc(t.subjects.sortOrder), asc(t.subjects.code));
   const gs = await db.select({ subjectId: t.grades.subjectId, value: t.grades.value, weight: t.grades.weight }).from(t.grades);
-  const per = subjects.map((s) => {
+  const all = subjects.map((s) => {
     const mine = gs.filter((g) => g.subjectId === s.id);
     const average = weightedAverage(mine);
-    const for45 = mine.length ? neededGrade(mine, TARGET_AVERAGE) : null;
-    const for4 = average !== null && average < MIN_SUBJECT ? neededGrade(mine, MIN_SUBJECT) : null;
-    return { subject: s.code, name: s.name, grades: mine.length, average, nextGradeFor45: for45, nextGradeFor4: for4, hinweis: average === null ? "noch keine Note" : neededText(for45) };
+    const marks = subjectMarks(average);
+    const counts = s.counts;
+    // Fächer, die nicht zählen: nur Information, kein Ziel, keine "nötige Note".
+    const for45 = counts && mine.length ? neededGrade(mine, TARGET_AVERAGE) : null;
+    const for4 = counts && average !== null && average < MIN_SUBJECT ? neededGrade(mine, MIN_SUBJECT) : null;
+    return {
+      subject: s.code,
+      name: s.name,
+      counts,
+      grades: mine.length,
+      average,
+      certificateGrade: marks?.certificate ?? null,
+      nextGradeFor45: for45,
+      nextGradeFor4: for4,
+      hinweis: average === null ? "noch keine Note" : !counts ? "zählt nicht zum Schnitt" : neededText(for45),
+    };
   });
+  const per = all.filter((p) => p.counts);
+  const informational = all.filter((p) => !p.counts);
   const overall = overallAverage(per.map((p) => p.average));
   const counted = per.filter((p) => p.average !== null);
   const below = per.filter((p) => p.average !== null && p.average < MIN_SUBJECT);
@@ -286,6 +304,7 @@ export async function gradeSummary(db: Db) {
     overall === null ? "Noch keine Noten." : `Gesamtschnitt ${overall} (Ziel ${TARGET_AVERAGE}).`,
     overall !== null && overall < TARGET_AVERAGE ? `Es fehlen ${missingPoints} Schnittpunkte, verteilt auf die Fächer.` : null,
     below.length ? `Unter ${MIN_SUBJECT}: ${below.map((b) => `${b.subject} ${b.average}`).join(", ")}.` : `Kein Fach unter ${MIN_SUBJECT}.`,
+    informational.length ? `Nicht gezählt: ${informational.map((p) => p.subject).join(", ")}.` : null,
   ].filter(Boolean);
   return {
     target: TARGET_AVERAGE,
@@ -295,6 +314,7 @@ export async function gradeSummary(db: Db) {
     missingAveragePoints: missingPoints,
     subjectsBelowMin: below.map((b) => ({ subject: b.subject, average: b.average, nextGradeFor4: b.nextGradeFor4 })),
     subjects: per,
+    notCounted: informational.map(({ nextGradeFor45, nextGradeFor4, ...p }) => p),
     zusammenfassung: lines.join(" "),
   };
 }
@@ -527,3 +547,53 @@ export async function todayOverview(db: Db, scopes: readonly string[]) {
   return out;
 }
 
+
+/* ---------- Stundenplan ---------- */
+
+export async function getTimetableData(db: Db) {
+  const lessons = await getTimetable(db);
+  const settings = await loadSettings(db);
+  return {
+    count: lessons.length,
+    schoolHolidayUntil: settings.schoolHolidayUntil || null,
+    lessons: lessons.map(({ id, ...l }) => l),
+    hinweis: "weekday: 1 = Montag bis 7 = Sonntag. Lektionen wiederholen sich jede Woche; Ferien kennt der Stundenplan nicht.",
+  };
+}
+
+export async function setTimetableData(db: Db, input: unknown) {
+  const parsed = timetableReplace.safeParse(input);
+  if (!parsed.success) {
+    const i = parsed.error.issues[0];
+    throw new ToolInputError(`Ungültiger Stundenplan: ${i.path.join(".") || "Eingabe"} ${i.message}`);
+  }
+  if (!parsed.data.lessons.length) throw new ToolInputError("Leerer Stundenplan: nichts ersetzt. Mindestens eine Lektion angeben.");
+  const before = (await getTimetable(db)).length;
+  const lessons = await replaceTimetable(db, parsed.data.lessons);
+  return { replaced: before, count: lessons.length, lessons: lessons.map(({ id, ...l }) => l) };
+}
+
+/* ---------- Mitteilung aufs Handy ---------- */
+
+export const NOTIFY_PER_DAY = 10;
+export const NOTIFY_URL = "/ziele";
+
+/** Zählt über sentReminders (Schlüssel notify:<Tag>:<n>): der Einfüge-Konflikt macht das Vergeben der n-ten Nachricht atomar. */
+async function claimNotifySlot(db: Db, day: string): Promise<boolean> {
+  for (let n = 1; n <= NOTIFY_PER_DAY; n++) {
+    const row = await db.insert(t.sentReminders).values({ key: `notify:${day}:${n}` }).onConflictDoNothing().returning({ key: t.sentReminders.key }).get();
+    if (row) return true;
+  }
+  return false;
+}
+
+export async function notifyOwner(db: Db, env: Bindings, b: { title: string; body: string }, deps: PushDeps = {}) {
+  const cfg = vapidFrom(env, deps);
+  if (!cfg) throw new ToolInputError("Mitteilungen sind auf dem Server nicht eingerichtet (VAPID-Schlüssel fehlt).");
+  const devices = await db.select({ id: t.pushSubscriptions.id }).from(t.pushSubscriptions).limit(1);
+  if (!devices.length) throw new ToolInputError("Kein Gerät angemeldet. Tim muss in der App unter Einstellungen Erinnerungen einschalten.");
+  const day = todayInZone(deps.now);
+  if (!(await claimNotifySlot(db, day))) throw new ToolInputError(`Tageslimit erreicht (${NOTIFY_PER_DAY} Mitteilungen pro Tag).`);
+  const r = await pushToAll(db, cfg, { title: b.title, body: b.body, url: NOTIFY_URL, tag: "connector" }, deps);
+  return { sent: r.sent, removedDevices: r.removed, failed: r.failed, limitPerDay: NOTIFY_PER_DAY, opens: NOTIFY_URL };
+}

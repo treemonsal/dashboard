@@ -103,6 +103,9 @@ export function NotenCard() {
   const sheet = useSheet();
   const rows = subjectAverages(subjects, grades);
   const avg = gesamt(rows);
+  const counted = rows.filter((r) => r.counts);
+  // Nicht zählende Fächer nur zur Information: getrennt am Ende, gedämpft, ohne Rot, ohne Zielstrich. Ohne Note gar nicht.
+  const info = rows.filter((r) => !r.counts && r.avg !== null);
   return (
     <div className="card">
       <h2>
@@ -113,13 +116,22 @@ export function NotenCard() {
         <span>Schnitt</span>
       </div>
       <div style={{ paddingBottom: 8 }}>
-        {rows.map((r) => (
+        {counted.map((r) => (
           <button key={r.subject.id} type="button" className={`gr press${r.avg !== null && r.avg < 4 ? " bad" : ""}`} onClick={() => sheet.open(<SubjectSheet id={r.subject.id} />)}>
             <span>{r.subject.code}</span>
             <span className="tk">{r.avg !== null && <i style={{ width: `${((r.avg - 1) / 5) * 100}%` }} />}</span>
             <span className={r.avg === null ? "none" : ""}>{r.avg === null ? "–" : nf(r.avg, 1)}</span>
           </button>
         ))}
+        {info.length > 0 && <div className="grinfo" role="group" aria-label="Zählt nicht zum Schnitt">
+          {info.map((r) => (
+            <button key={r.subject.id} type="button" className="gr info press" onClick={() => sheet.open(<SubjectSheet id={r.subject.id} />)}>
+              <span>{r.subject.code}</span>
+              <span className="tk"><i style={{ width: `${((r.avg! - 1) / 5) * 100}%` }} /></span>
+              <span>{nf(r.avg!, 1)}</span>
+            </button>
+          ))}
+        </div>}
       </div>
     </div>
   );

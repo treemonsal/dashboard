@@ -47,10 +47,14 @@ export function median(nums: number[]): number {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-/** Tagsüber gesperrte Zeit: Arbeitstage bis 17:00, Schultage bis 16:30, ab Aufstehzeit. */
-export function dayBlock(weekday: number, workDays: number[], schoolDays: number[], wake: string): Interval | null {
+/**
+ * Tagsüber gesperrte Zeit: Arbeitstage bis 17:00, Schultage bis 16:30, ab Aufstehzeit.
+ * Gibt es einen Stundenplan (`hasTimetable`), entfällt die pauschale Schulsperre: dann sperren die Lektionen selbst
+ * (sie kommen als `busy` herein), und ein schulfreier Tag oder ein Ferientag ist frei.
+ */
+export function dayBlock(weekday: number, workDays: number[], schoolDays: number[], wake: string, hasTimetable = false): Interval | null {
   if (workDays.includes(weekday)) return { start: minutesOf(wake), end: WORK_UNTIL };
-  if (schoolDays.includes(weekday)) return { start: minutesOf(wake), end: SCHOOL_UNTIL };
+  if (!hasTimetable && schoolDays.includes(weekday)) return { start: minutesOf(wake), end: SCHOOL_UNTIL };
   return null;
 }
 
@@ -67,6 +71,8 @@ export interface SuggestInput {
   wake: string;
   /** Frühester Beginn (Minuten seit Mitternacht), z.B. die aktuelle Uhrzeit heute. */
   from?: number;
+  /** Es gibt einen Stundenplan: die Lektionen stehen in `busy`, die pauschale Schulsperre gilt nicht. */
+  hasTimetable?: boolean;
 }
 
 /** Vorschlag für eine Aufgabe: Median der Uhrzeit ähnlicher Erledigungen am selben Wochentag, in eine freie Lücke gelegt. */
@@ -77,7 +83,7 @@ export function suggestTime(i: SuggestInput): Suggestion | null {
   const dur = i.durationMin ?? (durs.length ? Math.round(median(durs)) : DEFAULT_MIN);
   const want = Math.round(median(same.map((e) => minutesOf(e.doneTime))) / STEP) * STEP;
   const blocks = [...i.busy];
-  const db = dayBlock(i.weekday, i.workDays, i.schoolDays, i.wake);
+  const db = dayBlock(i.weekday, i.workDays, i.schoolDays, i.wake, i.hasTimetable);
   if (db) blocks.push(db);
   const lo = Math.max(minutesOf(i.wake), Math.ceil((i.from ?? 0) / STEP) * STEP);
   const free = (s: number) => s >= lo && s + dur <= LATEST_END && !blocks.some((b) => overlaps({ start: s, end: s + dur }, b));
@@ -95,13 +101,15 @@ export interface DayTask {
 }
 
 /** Vorschläge für alle offenen Aufgaben eines Tages ohne Uhrzeit. Jeder Vorschlag belegt seine Lücke für die nächsten. */
-export function suggestDay(o: { weekday: number; tasks: DayTask[]; events: LearnEvent[]; appointments: Interval[]; workDays: number[]; schoolDays: number[]; wake: string; from?: number }): Map<string, Suggestion> {
-  const busy: Interval[] = [...o.appointments];
+export function suggestDay(o: { weekday: number; tasks: DayTask[]; events: LearnEvent[]; appointments: Interval[]; workDays: number[]; schoolDays: number[]; wake: string; from?: number; lessons?: Interval[] | null }): Map<string, Suggestion> {
+  // `lessons` gesetzt (auch leer) = Stundenplan vorhanden: Lektionen sperren, die Pauschale entfällt.
+  const hasTimetable = !!o.lessons;
+  const busy: Interval[] = [...o.appointments, ...(o.lessons ?? [])];
   for (const t of o.tasks) if (t.dueTime) busy.push({ start: minutesOf(t.dueTime), end: minutesOf(t.dueTime) + (t.durationMin ?? DEFAULT_MIN) });
   const out = new Map<string, Suggestion>();
   for (const t of o.tasks) {
     if (t.dueTime || t.done) continue;
-    const s = suggestTime({ events: o.events, title: t.title, durationMin: t.durationMin, weekday: o.weekday, busy, workDays: o.workDays, schoolDays: o.schoolDays, wake: o.wake, from: o.from });
+    const s = suggestTime({ events: o.events, title: t.title, durationMin: t.durationMin, weekday: o.weekday, busy, workDays: o.workDays, schoolDays: o.schoolDays, wake: o.wake, from: o.from, hasTimetable });
     if (!s) continue;
     out.set(t.id, s);
     busy.push({ start: minutesOf(s.time), end: minutesOf(s.time) + (t.durationMin ?? DEFAULT_MIN) });

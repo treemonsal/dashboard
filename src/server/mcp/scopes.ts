@@ -1,16 +1,17 @@
 // Rechte (Scopes) des MCP-Connectors. Jedes Werkzeug verlangt genau ein Recht.
 
-export const SCOPES = ["tasks", "calendar", "school", "gym", "money:read", "health:read"] as const;
+export const SCOPES = ["tasks", "calendar", "school", "gym", "money:read", "health:read", "notify"] as const;
 export type Scope = (typeof SCOPES)[number];
 
 /** Beschreibung auf der Zustimmungsseite. */
 export const SCOPE_LABELS: Record<Scope, string> = {
   tasks: "Aufgaben lesen, anlegen, ändern und abhaken",
   calendar: "Termine lesen",
-  school: "Prüfungen und Noten lesen und neue eintragen",
+  school: "Prüfungen, Noten und Stundenplan lesen, Noten eintragen und den Stundenplan ersetzen",
   gym: "Trainings lesen und eintragen",
   "money:read": "Geld: nur Zusammenfassungen lesen (keine Einzelbuchungen)",
   "health:read": "Körper: nur Zusammenfassungen lesen",
+  notify: "Mitteilungen aufs Handy schicken (höchstens 10 pro Tag)",
 };
 
 export function isScope(s: string): s is Scope {
@@ -31,10 +32,13 @@ export const TOOL_SCOPES = {
   list_grades: "school",
   add_grade: "school",
   grade_summary: "school",
+  get_timetable: "school",
+  set_timetable: "school",
   gym_week: "gym",
   log_workout: "gym",
   money_summary: "money:read",
   health_summary: "health:read",
+  notify: "notify",
 } as const satisfies Record<string, Scope>;
 
 export type ToolName = keyof typeof TOOL_SCOPES;

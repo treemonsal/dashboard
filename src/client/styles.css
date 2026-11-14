@@ -119,6 +119,8 @@
   .gr .tk i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--fg); }
   .gr .tk::after { content: ""; position: absolute; left: 60%; top: -4px; bottom: -4px; width: 2px; background: var(--fg3); border-radius: 1px; }
   .gr.bad .tk i { background: var(--red); } .gr.bad span:last-child { color: var(--red); }
+  .grinfo { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .gr.info { color: var(--fg3); } .gr.info .tk i { background: var(--fg3); } .gr.info .tk::after { display: none; }
   .gr span:last-child { text-align: right; } .gr .none { color: var(--fg3); }
 
   /* Tagesplan */

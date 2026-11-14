@@ -53,7 +53,7 @@ export const mcpApiHandler = {
     }
 
     const db = drizzle(env.DB, { schema });
-    const handler = createMcpHandler(() => buildServer(db, auth.scope), {
+    const handler = createMcpHandler(() => buildServer(db, auth.scope, env), {
       maxRequestBodySize: MAX_BODY,
       keepAliveMs: 0,
       onerror: (e) => console.warn("mcp", e.message),

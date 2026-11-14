@@ -65,7 +65,7 @@ export const api = {
     get: () => get<S.Settings>("/settings"),
     put: (b: S.SettingsUpdate) => put<S.Settings>("/settings", b),
   },
-  subjects: { list: () => get<S.Subject[]>("/subjects") },
+  subjects: { list: () => get<S.Subject[]>("/subjects"), update: (id: string, b: S.SubjectUpdate) => patch<S.Subject>(`/subjects/${id}`, b) },
   exams: {
     list: (from?: string) => get<S.Exam[]>(from ? `/exams?from=${from}` : "/exams"),
     get: (id: string) => get<S.ExamDetail>(`/exams/${id}`),
@@ -109,6 +109,7 @@ export const api = {
     preview: (files: ImportFileIn[]) => post<S.ImportPreview>("/import/preview", { files }),
     commit: (files: ImportFileIn[]) => post<S.ImportResult>("/import/commit", { files }),
   },
+  timetable: { get: () => get<{ lessons: S.TimetableLesson[] }>("/timetable") },
   calendar: {
     list: () => get<S.CalendarInfo[]>("/calendars"),
     create: (b: S.CalendarCreate) => post<S.CalendarInfo>("/calendars", b),

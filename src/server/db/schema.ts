@@ -22,8 +22,27 @@ export const subjects = sqliteTable("subjects", {
   code: text("code").notNull().unique(),
   name: text("name"),
   sortOrder: integer("sort_order").notNull().default(0),
+  // false: Noten stehen nur zur Information da, zählen weder zum Schnitt noch zum Zeugnis
+  counts: integer("counts", { mode: "boolean" }).notNull().default(true),
   ...timestamps,
 });
+
+// Stundenplan (wöchentlich wiederkehrende Lektionen); wird vollständig ersetzt
+export const timetable = sqliteTable(
+  "timetable",
+  {
+    id: text("id").primaryKey(),
+    weekday: integer("weekday").notNull(), // 1 = Montag bis 7 = Sonntag
+    startTime: text("start_time").notNull(), // HH:MM
+    endTime: text("end_time").notNull(), // HH:MM
+    subject: text("subject").notNull(), // Fach-Kürzel als Text
+    room: text("room"),
+    teacher: text("teacher"),
+    validFrom: text("valid_from"), // YYYY-MM-DD
+    ...timestamps,
+  },
+  (t) => [check("timetable_weekday_chk", sql`${t.weekday} between 1 and 7`)],
+);
 
 export const exams = sqliteTable(
   "exams",

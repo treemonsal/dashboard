@@ -5,7 +5,7 @@ import { eventsOnDay } from "../shared/agenda";
 import { minutesOf, timeInZone, weekdayNum } from "../shared/dates";
 import { suggestDay, type Suggestion } from "../shared/vorschlag";
 import type { CalendarEvent, Task } from "../shared/schemas";
-import { useSettings } from "./queries";
+import { useSettings, useTimetable } from "./queries";
 
 const days = (s: string) => (s ? s.split(",").map(Number) : []);
 
@@ -13,6 +13,7 @@ const days = (s: string) => (s ? s.split(",").map(Number) : []);
 export function useSuggest() {
   const q = useQuery({ queryKey: ["task-events"], queryFn: api.taskEvents, staleTime: 5 * 60_000 });
   const s = useSettings();
+  const tt = useTimetable();
   const events = q.data ?? [];
   return (day: string, tasks: Task[], calendar: CalendarEvent[], today: string): Map<string, Suggestion> => {
     if (day < today || events.length === 0) return new Map();
@@ -27,6 +28,7 @@ export function useSuggest() {
       workDays: days(s.workDays),
       schoolDays: days(s.schoolDays),
       wake: s.wakeTime,
+      lessons: tt.has ? tt.on(day).map((b) => ({ start: b.startMin, end: b.endMin })) : null,
       from: day === today ? minutesOf(timeInZone(new Date())) : undefined,
     });
   };

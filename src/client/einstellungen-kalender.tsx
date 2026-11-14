@@ -2,6 +2,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, api } from "./api";
+import { addDays, todayInZone } from "../shared/dates";
 import { ConfirmDelete, Icon, Segments } from "./ui";
 import { notify } from "./toast";
 import { disablePush, enablePush, pushState, type PushState } from "./push";
@@ -79,6 +80,16 @@ export function KalenderEinstellungen() {
           <span>Hausaufgaben ausblenden</span>
           <Segments full={false} label="Hausaufgaben ausblenden" value={s.hideHomework === "0" ? "0" : "1"} onChange={(v) => set({ hideHomework: v })} options={[{ v: "0", label: "Aus" }, { v: "1", label: "An" }]} />
         </div>
+        <div className="field">
+          <span>Schulferien</span>
+          <Segments full={false} label="Schulferien" value={s.schoolHolidayUntil ? "1" : "0"} onChange={(v) => set({ schoolHolidayUntil: v === "1" ? addDays(todayInZone(), 13) : "" })} options={[{ v: "0", label: "Aus" }, { v: "1", label: "An" }]} />
+        </div>
+        {s.schoolHolidayUntil && (
+          <div className="field">
+            <label htmlFor="ferien-bis">Lektionen aus bis</label>
+            <input id="ferien-bis" className="inp" type="date" value={s.schoolHolidayUntil} onChange={(e) => e.target.value && set({ schoolHolidayUntil: e.target.value })} />
+          </div>
+        )}
       </div>
     </>
   );

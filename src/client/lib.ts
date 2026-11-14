@@ -1,6 +1,6 @@
 import { todayInZone, daysUntil, minutesOf } from "../shared/dates";
 import type { Task, Grade, Subject } from "../shared/schemas";
-import { overallAverage, weightedAverage } from "../shared/calc";
+import { countingAverage, weightedAverage } from "../shared/calc";
 
 export const isDone = (t: Task) => t.doneAt !== null;
 const doneToday = (t: Task, today: string) => t.doneAt !== null && todayInZone(new Date(t.doneAt)) === today;
@@ -23,10 +23,11 @@ export const upcoming = (tasks: Task[], today: string) => tasks.filter((t) => !t
 export function subjectAverages(subjects: Subject[], grades: Grade[]) {
   return subjects.map((s) => {
     const gs = grades.filter((g) => g.subjectId === s.id);
-    return { subject: s, grades: gs, avg: weightedAverage(gs) };
+    return { subject: s, grades: gs, avg: weightedAverage(gs), counts: s.counts !== false };
   });
 }
-export const gesamt = (rows: { avg: number | null }[]) => overallAverage(rows.map((r) => r.avg));
+/** Gesamtschnitt nur über Fächer, die zählen. */
+export const gesamt = (rows: { avg: number | null; counts: boolean }[]) => countingAverage(rows);
 
 export const examTone = (date: string) => (daysUntil(date) < 15 ? "soon" : "");
 

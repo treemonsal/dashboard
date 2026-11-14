@@ -5,6 +5,7 @@ import { api } from "./api";
 import { notify } from "./toast";
 import { addDays, mondayOf, todayInZone } from "../shared/dates";
 import { visibleEvents } from "../shared/agenda";
+import { blocksOn, type LessonBlock } from "../shared/stundenplan";
 import { SETTING_DEFAULTS } from "../shared/settings";
 import type * as S from "../shared/schemas";
 
@@ -29,6 +30,7 @@ export const keys = {
   events: (from: string, to: string) => ["events", from, to] as const,
   lastSync: ["last-sync"] as const,
   pushStatus: ["push-status"] as const,
+  timetable: ["timetable"] as const,
 };
 
 /** Aktuelle Zeit, minütlich aktualisiert (für Tag, Balken und Countdown). */
@@ -127,6 +129,13 @@ export function useSetSetting() {
 
 /* ---------- Schule ---------- */
 export const useSubjects = () => useQuery({ queryKey: keys.subjects, queryFn: api.subjects.list });
+export function useSetSubjectCounts() {
+  return useOpt<{ id: string; counts: boolean }, S.Subject[]>({
+    key: keys.subjects,
+    fn: ({ id, counts }) => api.subjects.update(id, { counts }),
+    apply: (d, { id, counts }) => d.map((x) => (x.id === id ? { ...x, counts } : x)),
+  });
+}
 export const useExams = () => useQuery({ queryKey: keys.exams, queryFn: () => api.exams.list(todayInZone()) });
 export const useExam = (id: string) => useQuery({ queryKey: keys.exam(id), queryFn: () => api.exams.get(id) });
 export const useGrades = () => useQuery({ queryKey: keys.grades, queryFn: api.grades.list });
@@ -284,6 +293,17 @@ export function useEvents(from: string, to: string) {
     return visibleEvents(q.data ?? [], { hideHomework: hide, exams: (exams ?? []).map((e) => ({ date: e.date, subjectCode: e.subjectCode, subjectName: names.get(e.subjectCode) ?? null })) });
   }, [q.data, exams, subjects, hide]);
   return { events, loaded: !q.isPending };
+}
+
+/** Stundenplan: `has` sagt, ob überhaupt einer da ist; `on(day)` liefert die Lektionsblöcke eines Tages (ohne Schulferien). */
+export function useTimetable() {
+  const q = useQuery({ queryKey: keys.timetable, queryFn: api.timetable.get, staleTime: 10 * 60_000 });
+  const until = useSettings().schoolHolidayUntil;
+  const lessons = q.data?.lessons;
+  return useMemo(() => {
+    const list = lessons ?? [];
+    return { has: list.length > 0, holidayUntil: until, on: (day: string): LessonBlock[] => blocksOn(list, day, until || null) };
+  }, [lessons, until]);
 }
 
 export function useAddCalendar() {

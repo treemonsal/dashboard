@@ -1,7 +1,7 @@
 // Inhalte der Blätter (zweite Ebene).
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { addDays, dayCompact, daysUntil, inDays, todayInZone, weekdayNum, WEEKDAY_LETTERS, WEEK_ORDER } from "../shared/dates";
-import { neededGrade } from "../shared/calc";
+import { neededGrade, subjectMarks } from "../shared/calc";
 import { buildRule, describeRule, parseRepeat } from "../shared/recurrence";
 import type { GymPlan, GymSet, Task } from "../shared/schemas";
 import { useSheet } from "./sheet";
@@ -14,7 +14,7 @@ import type { Suggestion } from "../shared/vorschlag";
 import { subjectAverages } from "./lib";
 import {
   useAddGrade, useAddTopic, useCreateTask, useDeleteGrade, useDeletePlan, useDeleteTask, useExam, useFinishSession, useGrades, useGymDay, useGymHistory,
-  useGymPlans, usePlanStudy, useProjects, useRemoveSession, useSavePlan, useSetAssessment, useStartSession, useSubjects, useTasks, useToday, useToggleTask,
+  useGymPlans, usePlanStudy, useProjects, useRemoveSession, useSavePlan, useSetAssessment, useSetSubjectCounts, useStartSession, useSubjects, useTasks, useToday, useToggleTask,
   useUpdateSet, useUpdateTask,
 } from "./queries";
 
@@ -452,6 +452,7 @@ export function SubjectSheet({ id }: { id: string }) {
   const grades = useGrades().data ?? [];
   const add = useAddGrade();
   const del = useDeleteGrade();
+  const setCounts = useSetSubjectCounts();
   const today = useToday();
   const row = useMemo(() => subjectAverages(subjects, grades).find((r) => r.subject.id === id), [subjects, grades, id]);
   const [value, setValue] = useState("");
@@ -467,13 +468,16 @@ export function SubjectSheet({ id }: { id: string }) {
   const tg = num(target);
   const need = tg !== null && num(rw) ? neededGrade(row.grades, tg, num(rw)!) : null;
   const avg = row.avg;
+  const counts = row.counts;
+  const marks = subjectMarks(avg);
   return (
     <div>
       <h3>{row.subject.code}</h3>
       <div className="yh" style={{ paddingTop: 4 }}>
-        <b className={avg !== null && avg < 4 ? "bad" : ""}>{avg === null ? "–" : nf(avg, 2)}</b>
+        <b className={counts ? (avg !== null && avg < 4 ? "bad" : "") : "faint"}>{avg === null ? "–" : nf(avg, 2)}</b>
         <span>Schnitt</span>
       </div>
+      {marks && counts && <div className="muted" style={{ paddingBottom: 8 }}>genau {nf(marks.exact, 2)}, Zeugnis {nf(marks.certificate, 1)}</div>}
       {row.grades.length === 0 && <div className="empty" style={{ paddingTop: 0 }}>Noch keine Note.</div>}
       {row.grades.map((g) => (
         <div key={g.id} className="row">
@@ -481,6 +485,10 @@ export function SubjectSheet({ id }: { id: string }) {
           <button type="button" className="iconbtn press" aria-label="Note löschen" onClick={() => del.mutate(g.id)}><Icon n="trash" /></button>
         </div>
       ))}
+      <div className="field">
+        <span>Zählt zum Schnitt</span>
+        <Segments full={false} label="Zählt zum Schnitt" value={counts ? "1" : "0"} onChange={(v) => setCounts.mutate({ id, counts: v === "1" })} options={[{ v: "0", label: "Aus" }, { v: "1", label: "An" }]} />
+      </div>
       <div className="sec">Note hinzufügen</div>
       <div className="field"><label htmlFor="g-v">Note</label><input id="g-v" className="inp num" inputMode="decimal" placeholder="4.5" value={value} onChange={(e) => setValue(e.target.value)} /></div>
       <div className="field"><label htmlFor="g-w">Gewicht</label><input id="g-w" className="inp num" inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} /></div>
@@ -490,6 +498,7 @@ export function SubjectSheet({ id }: { id: string }) {
         add.mutate({ id: uid(), subjectId: id, value: Math.round(v! * 100) / 100, weight: w!, date, title: title.trim() || null });
         setValue(""); setTitle("");
       }}>Hinzufügen</button>
+      {counts && <>
       <div className="sec">Welche Note brauche ich?</div>
       <div className="field"><label htmlFor="r-t">Schnitt</label><input id="r-t" className="inp num" inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} /></div>
       <div className="field"><label htmlFor="r-w">Gewicht der Prüfung</label><input id="r-w" className="inp num" inputMode="decimal" value={rw} onChange={(e) => setRw(e.target.value)} /></div>
@@ -499,6 +508,7 @@ export function SubjectSheet({ id }: { id: string }) {
         {need?.kind === "impossible" && <b style={{ fontSize: 22 }} className="bad">Nicht mehr erreichbar</b>}
         {!need && <b className="faint">–</b>}
       </div>
+      </>}
     </div>
   );
 }

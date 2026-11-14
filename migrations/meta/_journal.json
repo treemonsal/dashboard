@@ -50,6 +50,13 @@
       "when": 1794661604124,
       "tag": "0006_fitbit_zugang",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794666644479,
+      "tag": "0007_schule2",
+      "breakpoints": true
     }
   ]
 }
