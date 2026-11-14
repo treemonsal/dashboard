@@ -118,8 +118,10 @@
   .done .chk { background: var(--green); border-color: var(--green); transform: scale(1.08); }
   .done .chk svg { opacity: 1; }
   .pinned .chk { visibility: hidden; }
-  .tl { position: relative; }
-  .tl::before { content: ""; position: absolute; left: 54px; top: 28px; bottom: 28px; width: 2px; background: var(--line); border-radius: 1px; }
+  .slot:not(.nl)::after { content: ""; position: absolute; left: 60px; top: 0; bottom: 0; width: 2px; background: var(--line); border-radius: 1px; pointer-events: none; }
+  .tl > :first-child .slot::after, .tl > .slot:first-child::after { top: 50%; }
+  .slot.pinned::after { bottom: 50%; }
+  .slot .dot { z-index: 1; }
 
   .ex { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 6px 0; text-align: left; }
   .ex + .ex { border-top: 1px solid var(--line); }
@@ -183,8 +185,8 @@
   .inp.grow { flex: 1; width: 100%; }
   textarea.inp { height: auto; padding: 10px 12px; min-height: 88px; width: 100%; resize: none; line-height: 1.35; }
   .field .inp { text-align: right; max-width: 60%; }
-  .days { display: flex; gap: 4px; }
-  .days button { width: 40px; height: 44px; border-radius: 12px; background: var(--card2); color: var(--fg3); font-size: 13px; font-weight: 600; display: grid; place-items: center; text-align: center; padding: 0; transition: background 0.2s, color 0.2s; }
+  .days { display: flex; gap: 2px; }
+  .days button { width: 44px; height: 44px; border-radius: 12px; background: var(--card2); color: var(--fg3); font-size: 13px; font-weight: 600; display: grid; place-items: center; text-align: center; padding: 0; transition: background 0.2s, color 0.2s; }
   .days button[aria-pressed="true"] { background: var(--fg); color: #000; }
   .spark { display: block; width: 72px; height: 24px; overflow: visible; }
   .spark path { fill: none; stroke: var(--fg); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
