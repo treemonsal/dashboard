@@ -4,7 +4,12 @@
 @layer base {
   *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { background: var(--bg); overscroll-behavior-y: none; }
-  html.locked, html.locked body { overflow: hidden; }
+  /* Die Seite selbst scrollt nie. Gescrollt wird in .scroller: so gibt es keine Scroll-Anzeige am Rand,
+     und die Leiste unten bleibt stehen, wenn ein Blatt aufgeht. */
+  html, body { height: 100%; overflow: hidden; }
+  .scroller { position: fixed; inset: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; scrollbar-width: none; }
+  .scroller::-webkit-scrollbar { display: none; width: 0; height: 0; }
+  html.locked .scroller { overflow: hidden; }
   body { color: var(--fg); font-family: var(--font); font-size: var(--t-body); line-height: 1.3; -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; overflow-x: hidden; -webkit-text-size-adjust: 100%; }
   button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
   a { color: inherit; text-decoration: none; }
@@ -14,8 +19,8 @@
 
 @layer components {
   .app { max-width: var(--col); margin: 0 auto; display: flex; flex-direction: column; gap: var(--gap);
-    padding-top: max(14px, env(safe-area-inset-top, 0px)); padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px));
-    padding-left: max(var(--gutter), env(safe-area-inset-left, 0px)); padding-right: max(var(--gutter), env(safe-area-inset-right, 0px)); min-height: 100dvh; }
+    padding-top: calc(env(safe-area-inset-top, 0px) + 14px); padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+    padding-left: max(var(--gutter), env(safe-area-inset-left, 0px)); padding-right: max(var(--gutter), env(safe-area-inset-right, 0px)); min-height: 100%; }
   .app > * { min-width: 0; }
   .view { display: contents; }
   .view > * { animation: in 0.35s var(--ease) both; }
@@ -176,9 +181,12 @@
   /* Tab-Leiste: schwebende Pille, Symbol und Beschriftung, aktive Tab mit dunklerer Pille dahinter */
   .tabs { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(12px, env(safe-area-inset-bottom, 0px)); display: flex; gap: 0; padding: 5px; border-radius: 99px;
     background: rgba(40, 40, 44, 0.72); -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%); border: 1px solid var(--line); z-index: 5; max-width: calc(100vw - 16px); }
-  .tabs a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 56px; width: 68px; border-radius: 99px; color: var(--fg2); font-size: var(--t-tab); font-weight: 600; transition: background 0.3s var(--ease), color 0.2s, transform 0.3s var(--ease); touch-action: manipulation; }
+  .tabs a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 46px; width: 58px; border-radius: 99px; color: var(--fg2); transition: background 0.3s var(--ease), color 0.2s, transform 0.3s var(--ease); touch-action: manipulation; }
   .tabs a[data-down] { transform: scale(0.97); transition-duration: 0.06s; }
-  .tabs a[aria-current="page"] { background: rgba(0, 0, 0, 0.55); color: var(--fg); }
+  .tabs a[aria-current="page"] { background: rgba(255, 255, 255, 0.13); color: var(--fg); }
+  /* Ist ein Blatt offen, tritt die Leiste zurück */
+  .tabs { transition: opacity 0.2s var(--ease); }
+  html.locked .tabs { opacity: 0; pointer-events: none; }
   .tabs svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 
   /* Blatt */
@@ -243,8 +251,8 @@
   .stat .v small { font-size: var(--t-xs); color: var(--fg2); font-weight: 500; letter-spacing: 0; margin-left: 3px; }
   .stat .v.none { color: var(--fg3); }
 
-  .qe-space { height: 64px; flex: none; }
-  .qe { position: fixed; left: 0; right: 0; margin: 0 auto; width: min(var(--col), 100%); bottom: calc(max(14px, env(safe-area-inset-bottom, 0px)) + 62px); padding: 0 max(12px, env(safe-area-inset-left, 0px)); z-index: 4; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+  .qe-space { height: 76px; flex: none; }
+  .qe { position: fixed; left: 0; right: 0; margin: 0 auto; width: min(var(--col), 100%); bottom: calc(max(12px, env(safe-area-inset-bottom, 0px)) + 70px); padding: 0 max(12px, env(safe-area-inset-left, 0px)); z-index: 4; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
   .qe > * { pointer-events: auto; }
   .qe .chips { display: flex; gap: 6px; padding-left: 14px; flex-wrap: wrap; }
   .qe .chips span { background: var(--card2); color: var(--fg); font-size: var(--t-xs); font-weight: 600; padding: 5px 10px; border-radius: 99px; }

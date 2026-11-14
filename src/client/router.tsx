@@ -7,7 +7,7 @@ export function navigate(to: string) {
   if (to === location.pathname) return;
   history.pushState(null, "", to);
   listeners.forEach((l) => l());
-  window.scrollTo(0, 0);
+  document.getElementById("scroller")?.scrollTo(0, 0);
 }
 
 export function usePath(): string {

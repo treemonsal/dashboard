@@ -78,6 +78,9 @@ export function createApp() {
     c.res = new Response(c.res.body, { status: c.res.status, statusText: c.res.statusText, headers: h });
   });
 
+  // App-Symbole sind öffentlich: iOS lädt das Symbol für den Home-Bildschirm ohne Login-Cookie.
+  app.get("/icons/*", (c) => (c.env.ASSETS ? c.env.ASSETS.fetch(c.req.raw) : serveStatic(c.env.STATIC, new URL(c.req.url).pathname)));
+
   // Login für jede Route, auch für die Oberfläche und spätere Endpunkte.
   app.use("*", async (c, next) => {
     const r = await checkAccess(c.req.raw, c.env);

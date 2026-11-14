@@ -37,14 +37,15 @@ export function App() {
   const active = PARENT[path] ?? path;
   return (
     <SheetProvider>
-      <main className="app">
-        <View key={path} path={path} />
-      </main>
+      <div className="scroller" id="scroller">
+        <main className="app">
+          <View key={path} path={path} />
+        </main>
+      </div>
       <nav className="tabs" aria-label="Bereiche">
         {TABS.map((t) => (
-          <Link key={t.href} href={t.href} className="press-tab" aria-current={t.href === active ? "page" : undefined}>
+          <Link key={t.href} href={t.href} className="press-tab" aria-label={t.label} aria-current={t.href === active ? "page" : undefined}>
             <Icon n={t.icon} />
-            <span>{t.label}</span>
           </Link>
         ))}
       </nav>
