@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import { addDays, dayCompact, daysBetween, monthLong } from "../shared/dates";
 import { byCategory, mamaBalance, ownShare } from "../shared/geld";
-import { depotRules, depotState, toDepotEntry } from "../shared/depot";
+import { CONFIRMED_HOLDINGS, depotHoldings, PORTFOLIO_PRODUCTS, portfolioProduct, depotRules, depotState, toDepotEntry } from "../shared/depot";
 import type { Category, Transaction } from "../shared/schemas";
 import { useSheet } from "./sheet";
 import { notify } from "./toast";
@@ -90,14 +90,14 @@ export function TxSheet({ id }: { id: string }) {
   const upd = useUpdateTx();
   const t = tx.find((x) => x.id === id);
   if (!t) return <div style={{ minHeight: 120 }} />;
-  const set = (patch: Record<string, unknown>) => upd.mutate({ id, patch });
+  const set = (patch: Record<string, unknown>, onSuccess?: () => void) => upd.mutate({ id, patch }, { onSuccess });
   return (
     <div>
       <h3>{t.description || "Buchung"}</h3>
       <div className="when"><Money v={t.amount} size={26} signed /> · {dayCompact(t.date)}</div>
       <div className="field">
         <label htmlFor="tx-c">Kategorie</label>
-        <select id="tx-c" className="inp" value={t.categoryId ?? ""} onChange={(e) => { set({ categoryId: e.target.value || null }); if (e.target.value && t.description) notify("Gemerkt für ähnliche Buchungen"); }}>
+        <select id="tx-c" className="inp" value={t.categoryId ?? ""} onChange={(e) => { set({ categoryId: e.target.value || null }, () => { if (e.target.value && t.description) notify("Gemerkt für ähnliche Buchungen"); }); }}>
           <option value="">Keine</option>
           {cats.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
         </select>
@@ -161,13 +161,14 @@ export function MamaSheet() {
 
 /* ---------- Depot ---------- */
 export function useDepot() {
-  const entries = useInvest().data ?? [];
+  const query = useInvest();
+  const entries = query.data ?? [];
   const s = useSettings();
   return useMemo(() => {
     const st = depotState(entries.map((e) => toDepotEntry(e)), depotRules(s));
     const latest = st.latest ? { ...st.latest, amount: st.latest.value } : null;
-    return { entries, st, series: st.series, latest, deposits: st.deposited, gain: st.gain, pct: st.pct, hasDeposits: st.deposited > 0 };
-  }, [entries, s]);
+    return { error: query.error, loading: query.isPending, entries, st, series: st.series, latest, deposits: st.deposited, gain: st.gain, pct: st.pct, hasDeposits: st.deposited > 0 };
+  }, [entries, s, query.error, query.isPending]);
 }
 
 export const pctText = (p: number) => `${p > 0 ? "+" : p < 0 ? "−" : ""}${nf(Math.abs(p), 1)} %`;
@@ -202,7 +203,8 @@ export function DepotSheet() {
   const parse = (x: string) => { const n = parseFloat(x.replace(",", ".")); return Number.isFinite(n) && n >= 0 ? n : null; };
   const hand = d.entries.filter((e) => !e.estimated && e.note !== "auto");
   const first = d.st.start;
-  const exact = !!s.investSymbol && Number(s.investShares) > 0;
+  const holdings = depotHoldings(s);
+  const legacy = !!s.investSymbol && !s.investHoldings;
   async function refresh() {
     setBusy(true);
     try {
@@ -217,7 +219,9 @@ export function DepotSheet() {
   }
   return (
     <div>
-      <h3>Depot S&amp;P 500</h3>
+      <h3>Portfolio</h3>
+      {d.error && <div className="empty" role="alert">Portfolio konnte nicht geladen werden. Bitte erneut versuchen.</div>}
+      {d.loading && <div className="empty" role="status">Portfolio wird geladen</div>}
       <div className="when">{d.latest ? `Stand ${dayCompact(d.latest.date)}${d.latest.estimated ? " · geschätzt" : ""}` : "Startbestand eintragen"}</div>
       {d.latest ? <Money v={d.latest.value} size={38} /> : <div className="bigv faint">–</div>}
       {d.latest && (
@@ -230,21 +234,23 @@ export function DepotSheet() {
       <div className="sec">{first ? "Neuer Wert" : "Startbestand"}</div>
       <div className="field"><label htmlFor="d-v">Betrag</label><input id="d-v" className="inp num" style={{ width: 110 }} inputMode="decimal" value={val} onChange={(e) => setVal(e.target.value)} /></div>
       <div className="field"><label htmlFor="d-d">Datum</label><input id="d-d" className="inp" type="date" value={vd} onChange={(e) => setVd(e.target.value)} /></div>
-      <button type="button" className="cta press" disabled={parse(val) === null || !vd} onClick={() => { add.mutate({ id: uid(), kind: "value", date: vd, amount: parse(val)! }); setVal(""); }}>{first ? "Wert speichern" : "Startbestand speichern"}</button>
+      <button type="button" className="cta press" disabled={add.isPending || parse(val) === null || !vd} onClick={() => { add.mutate({ id: uid(), kind: "value", date: vd, amount: parse(val)! }, { onSuccess: () => setVal("") }); }}>{first ? "Wert speichern" : "Startbestand speichern"}</button>
       <div className="sec">Einzahlungen</div>
       <div className="field"><label htmlFor="d-m">Pro Monat</label><input id="d-m" className="inp num" inputMode="decimal" defaultValue={s.investMonthly} onBlur={(e) => { const n = parse(e.target.value); if (n !== null && String(n) !== s.investMonthly) setS({ investMonthly: String(n) }); }} /></div>
       <div className="field"><label htmlFor="d-t">Am</label><input id="d-t" className="inp num" style={{ width: 70 }} inputMode="numeric" defaultValue={s.investDay} onBlur={(e) => { const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 28 && String(n) !== s.investDay) setS({ investDay: String(n) }); else e.target.value = s.investDay; }} /></div>
       <div className="field"><label htmlFor="d-e">Nachtragen</label><input id="d-e" className="inp num" style={{ width: 110 }} inputMode="decimal" value={dep} onChange={(e) => setDep(e.target.value)} /></div>
       <div className="field"><label htmlFor="d-ed">Datum</label><input id="d-ed" className="inp" type="date" value={dd} onChange={(e) => setDd(e.target.value)} /></div>
-      <button type="button" className="cta ghost press" disabled={parse(dep) === null || !dep || !dd} onClick={() => { add.mutate({ id: uid(), kind: "deposit", date: dd, amount: parse(dep)!, note: "von Hand" }); setDep(""); }}>Einzahlung eintragen</button>
-      <div className="sec">Genau rechnen</div>
+      <button type="button" className="cta ghost press" disabled={add.isPending || parse(dep) === null || !dep || !dd} onClick={() => { add.mutate({ id: uid(), kind: "deposit", date: dd, amount: parse(dep)!, note: "von Hand" }, { onSuccess: () => setDep("") }); }}>Einzahlung eintragen</button>
+      {legacy && <>      <div className="sec">Genau rechnen</div>
       <div className="field"><label htmlFor="d-k">Kürzel</label><input id="d-k" className="inp" style={{ width: 110 }} autoCapitalize="characters" defaultValue={s.investSymbol} placeholder="z.B. VOO" onBlur={(e) => { const v = e.target.value.trim().toUpperCase(); if (v !== s.investSymbol) setS({ investSymbol: v }); }} /></div>
       <div className="field"><label htmlFor="d-a">Anteile</label><input id="d-a" className="inp num" style={{ width: 110 }} inputMode="decimal" defaultValue={s.investShares} onBlur={(e) => { const n = parse(e.target.value); const v = n === null ? "" : String(n); if (v !== s.investShares) setS({ investShares: v }); }} /></div>
       <div className="field"><label htmlFor="d-w">Währung</label>
         <select id="d-w" className="inp" value={s.investCurrency} onChange={(e) => setS({ investCurrency: e.target.value as "USD" | "CHF" | "EUR" })}>
           <option value="USD">USD</option><option value="CHF">CHF</option><option value="EUR">EUR</option>
         </select></div>
-      <div className="when" style={{ marginTop: 6 }}>{exact ? "Wert = Anteile mal Kurs" : "Ohne Anteile wird geschätzt"}</div>
+      <div className="when" style={{ marginTop: 6 }}>Bisherige Einzelposition</div>
+</>}
+      <PortfolioPositions key={s.investHoldings + s.investSymbol} holdings={legacy ? null : holdings} />
       <button type="button" className="cta ghost press" disabled={busy || !first} onClick={refresh}>Jetzt abrufen</button>
       {hand.length > 0 && <div className="sec">Einträge</div>}
       {[...hand].reverse().map((e) => (
@@ -255,6 +261,41 @@ export function DepotSheet() {
       ))}
     </div>
   );
+}
+
+function PortfolioPositions({ holdings }: { holdings: ReturnType<typeof depotHoldings> }) {
+  const qc = useQueryClient();
+  const [draft, setDraft] = useState(() => holdings?.map(h => ({ symbol: h.symbol, shares: String(h.shares) })) ?? []);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function save(rows = draft) {
+    setError("");
+    const values = rows.map(h => ({ symbol: h.symbol, shares: Number(h.shares.replace(",", ".")) }));
+    if (values.some(h => !portfolioProduct(h.symbol) || !Number.isFinite(h.shares) || h.shares <= 0)) {
+      setError("Für jede Position eine positive Anzahl Anteile eintragen."); return;
+    }
+    setBusy(true);
+    try {
+      await api.settings.put({ investHoldings: JSON.stringify(values) });
+      await qc.invalidateQueries({ queryKey: ["settings"] });
+      notify("Positionen gespeichert");
+    } catch { setError("Positionen nicht gespeichert. Deine Eingaben bleiben erhalten."); }
+    finally { setBusy(false); }
+  }
+  return <>
+    <div className="sec">Positionen</div>
+    <div className="when">Bewertung aller Positionen mit Tradegate Kursen in EUR, umgerechnet in CHF. VUAA: S&amp;P 500. XNAS: Nasdaq 100. NVIDIA: Einzelaktie.</div>
+    {draft.map((h, i) => <div className="field" key={h.symbol}>
+      <label htmlFor={`holding-${h.symbol}`}>{h.symbol} Anteile</label>
+      <input id={`holding-${h.symbol}`} className="inp num" style={{ width: 110 }} inputMode="decimal" value={h.shares} onChange={e => setDraft(d => d.map((r, j) => j === i ? { ...r, shares: e.target.value } : r))} />
+      <button type="button" className="iconbtn press" aria-label={`${h.symbol} entfernen`} onClick={() => setDraft(d => d.filter((_, j) => j !== i))}><Icon n="trash" /></button>
+    </div>)}
+    {PORTFOLIO_PRODUCTS.filter(p => !draft.some(h => h.symbol === p.symbol)).map(p => <button type="button" className="chip btn press" key={p.symbol} onClick={() => setDraft(d => [...d, { symbol: p.symbol, shares: "" }])}>{p.symbol} hinzufügen</button>)}
+    {error && <div className="bad" role="alert">{error}</div>}
+    <button type="button" className="cta ghost press" disabled={busy} onClick={() => void save()}>{busy ? "Speichert" : "Positionen speichern"}</button>
+    {!holdings && <button type="button" className="cta ghost press" disabled={busy} onClick={() => { const rows = CONFIRMED_HOLDINGS.map(h => ({ symbol: h.symbol, shares: String(h.shares) })); setDraft(rows); void save(rows); }}>VUAA 12.2, XNAS 23, NVIDIA 3 übernehmen</button>}
+    <div className="when" style={{ marginTop: 6 }}>Anteile nach Käufen und Verkäufen aktualisieren. Neue Kurse gelten ab dem letzten Handwert. Es entsteht nur mit Kursen für alle Positionen ein Gesamtwert.</div>
+  </>;
 }
 
 export const _unused = { addDays, daysBetween, byCategory };

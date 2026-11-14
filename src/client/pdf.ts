@@ -10,12 +10,15 @@ const MAX_PAGES = 80;
 export async function readPdfFile(file: File): Promise<ImportFileIn> {
   if (file.size > MAX_BYTES) throw new Error("PDF zu gross");
   const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+  // Alte Auslieferungen wurden mit falschem MIME Typ ein Jahr lang gecacht.
+  // Die neue URL holt einmalig die korrigierte Modulantwort, auch auf bestehenden iPhones.
+  pdfjs.GlobalWorkerOptions.workerSrc = `${workerUrl}?module=1`;
   const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
-  const doc = await task.promise;
   try {
+    const doc = await task.promise;
+    if (doc.numPages > MAX_PAGES) throw new Error("PDF zu lang");
     const items: PdfItem[] = [];
-    const n = Math.min(doc.numPages, MAX_PAGES);
+    const n = doc.numPages;
     for (let p = 1; p <= n; p++) {
       const page = await doc.getPage(p);
       const tc = await page.getTextContent();
@@ -24,6 +27,7 @@ export async function readPdfFile(file: File): Promise<ImportFileIn> {
         items.push({ page: p, x: it.transform[4] ?? 0, y: it.transform[5] ?? 0, w: it.width, text: it.str });
       }
     }
+    if (!items.length) throw new Error("PDF ohne Text");
     const lines = groupLines(items);
     const res = parsePdf(lines);
     return {
@@ -41,6 +45,6 @@ export async function readPdfFile(file: File): Promise<ImportFileIn> {
       pdfInfo: { warnings: res.warnings, dated: res.stats.dated, recognized: res.stats.recognized, text: pdfText(lines) },
     };
   } finally {
-    void task.destroy();
+    await task.destroy().catch(() => undefined);
   }
 }

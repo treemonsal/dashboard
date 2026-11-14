@@ -1,3 +1,4 @@
+import { QueryNotice } from "./query-state";
 import { useEffect, useRef, useState } from "react";
 import { AbgleichLaeufe, VerbundeneApps } from "./einstellungen-apps";
 import { FitbitEinstellungen, FitbitLeer } from "./fitbit";
@@ -14,7 +15,7 @@ import { DepotSheet, CatIcon, MamaSheet, SpendChart, TxRow, monthTitle, pctText,
 import { DayToggles, DetailHead, Empty, Icon, Money, RoundAction, PageTitle, nf, hm } from "./ui";
 import { GymCard } from "./cards";
 import { useMonthMoney, useLatest } from "./lib";
-import { useAccounts, useAllTransactions, useCategories, useExams, useGymPlans, useNow, useSetSetting, useSettings, useTasks, useToday, useTransactions } from "./queries";
+import { useAccounts, useAllTransactions, useCategories, useExams, useGymPlans, useNow, useSetSetting, useSettings, useSettingsQuery, useTasks, useToday, useTransactions } from "./queries";
 import { notify } from "./toast";
 import { UploadAction } from "./import";
 
@@ -27,9 +28,11 @@ export function Geld() {
   const [month, setMonth] = useState(today.slice(0, 7));
   const m = useMonthMoney();
   const q = useTransactions(month);
-  const accs = useAccounts().data ?? [];
+  const accountsQuery = useAccounts();
+  const accs = accountsQuery.data ?? [];
   const cats = useCategories().data ?? [];
-  const all = useAllTransactions().data ?? [];
+  const allQuery = useAllTransactions();
+  const all = allQuery.data ?? [];
   const mama = useMama();
   const dep = useDepot();
   const s = useSettings();
@@ -42,7 +45,7 @@ export function Geld() {
       <PageTitle>Geld</PageTitle>
       <div className="center">
         <div className="lbl">Übrig</div>
-        {hasAny ? <Money v={m.budget - spent} size={52} /> : <span className="bigv faint" style={{ fontSize: 52 }}>–</span>}
+        {hasAny && q.isSuccess && m.loaded ? <Money v={m.budget - spent} size={52} /> : <span className="bigv faint" style={{ fontSize: 52 }}>–</span>}
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <button type="button" className="iconbtn press" aria-label="Voriger Monat" onClick={() => shift(-1)}><Icon n="back" /></button>
           <span className="chip">{month === today.slice(0, 7) ? "Diesen Monat" : `${monthTitle(month)} ${month.slice(0, 4)}`}</span>
@@ -52,13 +55,13 @@ export function Geld() {
       <div className="acts">
         <UploadAction />
         <RoundAction icon="chart" label="Analyse" href="/analyse" />
-        <RoundAction icon="coin" label="Depot" onClick={() => sheet.open(<DepotSheet />)} />
+        <RoundAction icon="coin" label="Portfolio" onClick={() => sheet.open(<DepotSheet />)} />
         <RoundAction icon="fork" label="Offen von Mama" onClick={() => sheet.open(<MamaSheet />)} />
       </div>
 
       <div className="card">
         <h2>Ausgegeben</h2>
-        {hasAny ? (
+        {!q.isSuccess || !allQuery.isSuccess || !m.loaded ? <QueryNotice pending={q.isPending || allQuery.isPending || m.loading} error={q.error ?? allQuery.error ?? m.error} /> : hasAny ? (
           <div style={{ paddingBottom: 14 }}>
             <Money v={spent} size={34} />
             <div style={{ marginTop: 10 }}><SpendChart txs={txs} month={month} budget={m.budget} today={today} /></div>
@@ -80,13 +83,14 @@ export function Geld() {
 
       <div className="card">
         <h2>Konten</h2>
+        <QueryNotice pending={accountsQuery.isPending} error={accountsQuery.error} />
         <div className="acc" style={{ paddingBottom: 14 }}>
           {accs.map((a) => (<span key={a.id}>{a.name}<b className={a.balance === 0 ? "none" : ""}>{a.balance === 0 ? "–" : nf(a.balance)}</b></span>))}
         </div>
       </div>
 
       <button type="button" className="card tap press" onClick={() => sheet.open(<DepotSheet />)}>
-        <h2>Depot S&amp;P 500</h2>
+        <h2>Portfolio</h2>
         <div style={{ paddingBottom: 14 }}>
           {dep.latest ? <Money v={dep.latest.value} size={30} /> : <span className="muted" style={{ fontSize: 15 }}>Startbestand eintragen</span>}
           {dep.latest && <div className={dep.latest.gain === 0 ? "muted" : dep.latest.gain > 0 ? "good" : "bad"} style={{ fontWeight: 600, fontSize: 15, marginTop: 2 }}><Money v={dep.latest.gain} size={17} cur={false} signed />{dep.pct !== null && <span style={{ marginLeft: 8 }}>{pctText(dep.pct)}</span>}</div>}
@@ -97,7 +101,7 @@ export function Geld() {
         <div className="card">
           <h2>Buchungen</h2>
           {txs.slice(0, 8).map((t) => (<TxRow key={t.id} t={t} cats={cats} />))}
-          {txs.length === 0 && <div className="empty">Keine Buchungen in diesem Monat.</div>}
+          {q.isSuccess && txs.length === 0 && <div className="empty">Keine Buchungen in diesem Monat.</div>}
           {txs.length > 8 && <button type="button" className="more press" onClick={() => sheet.open(<AllTx month={month} />)}>Alle anzeigen</button>}
         </div>
       )}
@@ -106,15 +110,17 @@ export function Geld() {
 }
 
 function AllTx({ month }: { month: string }) {
-  const txs = useTransactions(month).data ?? [];
+  const txQuery = useTransactions(month);
+  const txs = txQuery.data ?? [];
   const cats = useCategories().data ?? [];
-  return (<div><h3>Buchungen</h3><div className="when">{monthTitle(month)}</div>{txs.map((t) => (<TxRow key={t.id} t={t} cats={cats} />))}</div>);
+  return (<div><h3>Buchungen</h3><div className="when">{monthTitle(month)}</div><QueryNotice pending={txQuery.isPending} error={txQuery.error} />{txs.map((t) => (<TxRow key={t.id} t={t} cats={cats} />))}</div>);
 }
 
 export function Analyse() {
   const today = useToday();
   const [month, setMonth] = useState(today.slice(0, 7));
-  const txs = useTransactions(month).data ?? [];
+  const txQuery = useTransactions(month);
+  const txs = txQuery.data ?? [];
   const cats = useCategories().data ?? [];
   const days = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7), 0)).getUTCDate();
   const weeks = [[1, 7], [8, 14], [15, 21], [22, 28], ...(days > 28 ? [[29, days]] : [])];
@@ -134,8 +140,8 @@ export function Analyse() {
           <button type="button" className="iconbtn press" aria-label="Nächster Monat" style={{ transform: "scaleX(-1)" }} disabled={month >= today.slice(0, 7)} onClick={() => shift(1)}><Icon n="back" /></button>
         </div>
       </div>
-      {txs.length === 0 ? (
-        <div className="card"><div className="empty">Noch kein Export hochgeladen.</div></div>
+      {!txQuery.isSuccess ? <QueryNotice pending={txQuery.isPending} error={txQuery.error} /> : txs.length === 0 ? (
+        <div className="card"><div className="empty">Keine Buchungen in diesem Monat.</div></div>
       ) : (
         <>
           <div className="card">
@@ -169,27 +175,30 @@ export function Analyse() {
 
 /* ---------- Körper ---------- */
 export function Koerper() {
+  const today = useToday();
   const sheet = useSheet();
   const sleep = useLatest("sleepMin");
   const steps = useLatest("steps");
   const hr = useLatest("restingHr");
   const w = useLatest("weightKg");
   const connected = [...sleep.rows, ...steps.rows, ...hr.rows].some((r) => r.source === "fitbit");
-  const Stat = ({ k, metric, v, unit }: { k: string; metric: "sleep" | "steps" | "hr" | "weight"; v: string | null; unit?: string }) => (
+  const Stat = ({ k, metric, v, unit, day }: { k: string; metric: "sleep" | "steps" | "hr" | "weight"; v: string | null; unit?: string; day?: string }) => (
     <button type="button" className="stat press" onClick={() => sheet.open(<HealthSheet metric={metric} />)}>
       <span className="k">{k}</span>
       <span className={`v ${v === null ? "none" : ""}`}>{v ?? "–"}{v !== null && unit && <small>{unit}</small>}</span>
+      {day && day !== today && <span className="k">{dayCompact(day)}</span>}
     </button>
   );
   return (
     <div className="view">
       <PageTitle>Körper</PageTitle>
-      {!connected && <FitbitLeer />}
+      <QueryNotice pending={sleep.loading} error={sleep.error} />
+      {sleep.loaded && !connected && <FitbitLeer />}
       <div className="grid2">
-        <Stat k="Schlaf" metric="sleep" v={sleep.latest?.sleepMin != null ? hm(sleep.latest.sleepMin) : null} />
+        <Stat day={sleep.latest?.day} k="Schlaf" metric="sleep" v={sleep.latest?.sleepMin != null ? hm(sleep.latest.sleepMin) : null} />
         <Stat k="Schritte" metric="steps" v={steps.latest?.steps != null ? nf(steps.latest.steps) : null} />
-        <Stat k="Ruhepuls" metric="hr" v={hr.latest?.restingHr != null ? String(hr.latest.restingHr) : null} unit="bpm" />
-        <Stat k="Gewicht" metric="weight" v={w.latest?.weightKg != null ? nf(w.latest.weightKg, 1) : null} unit="kg" />
+        <Stat day={hr.latest?.day} k="Ruhepuls" metric="hr" v={hr.latest?.restingHr != null ? String(hr.latest.restingHr) : null} unit="bpm" />
+        <Stat day={w.latest?.day} k="Gewicht" metric="weight" v={w.latest?.weightKg != null ? nf(w.latest.weightKg, 1) : null} unit="kg" />
       </div>
       <Trainings />
       <GymCard />
@@ -199,13 +208,15 @@ export function Koerper() {
 
 /* ---------- Pläne ---------- */
 export function Plaene() {
-  const plans = useGymPlans().data ?? [];
+  const plansQuery = useGymPlans();
+  const plans = plansQuery.data ?? [];
   const sheet = useSheet();
   return (
     <div className="view">
       <DetailHead title="Pläne" back="/ziele" />
       <div className="card">
-        {plans.length === 0 && <Empty action={{ label: "Plan anlegen", onClick: () => sheet.open(<PlanSheet id={null} />) }}>Noch kein Trainingsplan.</Empty>}
+        <QueryNotice pending={plansQuery.isPending} error={plansQuery.error} />
+        {plansQuery.isSuccess && plans.length === 0 && <Empty action={{ label: "Plan anlegen", onClick: () => sheet.open(<PlanSheet id={null} />) }}>Noch kein Trainingsplan.</Empty>}
         {plans.map((p) => (
           <button key={p.id} type="button" className="lrow press" onClick={() => sheet.open(<PlanSheet id={p.id} />)}>
             <span className="ic"><Icon n="dumbbell" /></span>
@@ -261,7 +272,8 @@ export function Zeit() {
   const now = useNow();
   const today = useToday();
   const s = useSettings();
-  const exams = useExams().data ?? [];
+  const examsQuery = useExams();
+  const exams = examsQuery.data ?? [];
   const tasks = useTasks().data ?? [];
   const sheet = useSheet();
   const y = Number(today.slice(0, 4));
@@ -329,7 +341,8 @@ export function Zeit() {
 
       <div className="card">
         <h2>Prüfungen</h2>
-        {exams.length === 0 && <div className="empty">Keine kommenden Prüfungen.</div>}
+        <QueryNotice pending={examsQuery.isPending} error={examsQuery.error} />
+        {examsQuery.isSuccess && exams.length === 0 && <div className="empty">Keine kommenden Prüfungen.</div>}
         {exams.map((e) => {
           const n = daysUntil(e.date);
           return (
@@ -359,6 +372,7 @@ export function Zeit() {
 
 /* ---------- Einstellungen ---------- */
 export function Einstellungen() {
+  const settings = useSettingsQuery();
   const s = useSettings();
   const set = useSetSetting();
   const num = (x: string) => { const n = parseFloat(x.replace(",", ".")); return Number.isFinite(n) && n >= 0 ? n : null; };
@@ -377,6 +391,7 @@ export function Einstellungen() {
       notify("Export fehlgeschlagen");
     }
   }
+  if (!settings.isSuccess) return <div className="view"><DetailHead title="Einstellungen" /><QueryNotice pending={settings.isPending} error={settings.error} /></div>;
   return (
     <div className="view">
       <DetailHead title="Einstellungen" />
@@ -396,7 +411,7 @@ export function Einstellungen() {
       </div>
       <div className="card" style={{ paddingTop: 0 }}>
         <div className="field" style={{ borderTop: 0 }}><label htmlFor="s-l">Lohn pro Monat</label><input id="s-l" className="inp num" inputMode="decimal" defaultValue={s.salary} onBlur={(e) => { const n = num(e.target.value); if (n !== null && String(n) !== s.salary) set({ salary: String(n) }); }} /></div>
-        <div className="field"><label htmlFor="s-i">Einzahlung S&amp;P 500</label><input id="s-i" className="inp num" inputMode="decimal" defaultValue={s.investMonthly} onBlur={(e) => { const n = num(e.target.value); if (n !== null && String(n) !== s.investMonthly) set({ investMonthly: String(n) }); }} /></div>
+        <div className="field"><label htmlFor="s-i">Einzahlung Portfolio</label><input id="s-i" className="inp num" inputMode="decimal" defaultValue={s.investMonthly} onBlur={(e) => { const n = num(e.target.value); if (n !== null && String(n) !== s.investMonthly) set({ investMonthly: String(n) }); }} /></div>
         <div className="field"><label htmlFor="s-m">Mahlzeiten zahlt</label><input id="s-m" className="inp" placeholder="Name" defaultValue={s.mamaName} maxLength={60} onBlur={(e) => e.target.value.trim() !== s.mamaName && set({ mamaName: e.target.value.trim() })} /></div>
       </div>
       <KalenderEinstellungen />

@@ -5,10 +5,10 @@ import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
 import { addDays, todayInZone } from "../../shared/dates";
-import { AUTO_NOTE, depotConfig, depotRules, planValues, toDepotEntry, type Close, type NewValue } from "../../shared/depot";
+import { AUTO_NOTE, depotHoldings, portfolioProduct, planPortfolioValues, depotConfig, depotRules, planValues, toDepotEntry, type NewValue } from "../../shared/depot";
 import { SETTING_DEFAULTS, type Settings } from "../../shared/settings";
 import { newId, nowIso, type Bindings, type Db } from "../util";
-import { ISIN, SYMBOL, cboe, frankfurter, type FxSource, type PriceSource } from "./kurse";
+import { ISIN, cboe, tradegate, frankfurter, type FxSource, type PriceSource } from "./kurse";
 
 export const KIND = "depot";
 /** Vergleichs-ETF für die Schätzung: SPDR S&P 500 (SPY), US-Börse, in USD. */
@@ -58,22 +58,33 @@ export async function updateDepot(env: Bindings, deps: DepotDeps = {}): Promise<
     const base = entries.filter((e) => e.kind === "value" && !e.estimated && !e.auto).sort((a, b) => a.date.localeCompare(b.date)).at(-1);
     if (!base) return await done(true, "Noch kein Startwert eingetragen");
     const cfg = depotConfig(s);
-    if (ISIN.test(cfg.symbol)) return await done(false, "Die Kursquelle kennt nur Kürzel (z.B. VOO), keine ISIN");
-    const exactWanted = SYMBOL.test(cfg.symbol) && cfg.shares > 0;
+    const holdings = depotHoldings(s);
+    if (!holdings) return await done(false, "Portfolio Positionen unvollständig oder ungültig");
     const since = addDays(base.date, -WINDOW_DAYS);
-
-    const proxy = await price.closes(PROXY_SYMBOL, since, f);
-    const usd = await fxSrc.rates("USD", since, f);
-    if (!proxy.length || !usd.length) return await done(false, "Kursquelle nicht erreichbar, kein neuer Wert");
-    let held: Close[] = [];
-    let heldFx: Close[] | null = null;
-    if (exactWanted) {
-      held = await price.closes(cfg.symbol, since, f);
-      heldFx = cfg.currency === "USD" ? usd : cfg.currency === "CHF" ? null : await fxSrc.rates("EUR", since, f);
+    let plan: NewValue[];
+    if (holdings.length) {
+      if (holdings.some(h => !(h.shares > 0) || ISIN.test(h.symbol))) return await done(false, "Kürzel und positive Anteile prüfen");
+      const positions = await Promise.all(holdings.map(async config => {
+        const product = portfolioProduct(config.symbol);
+        const held = deps.price
+          ? await deps.price.closes(config.exchange === "TRADEGATE" ? product!.isin : config.symbol, since, f)
+          : config.exchange === "TRADEGATE"
+            ? await tradegate.closes(product!.isin, since, f, deps.now ?? new Date())
+            : await price.closes(config.symbol, since, f);
+        const rates = config.currency === "CHF" ? null : await fxSrc.rates(config.currency, since, f);
+        return { config, held, fx: rates };
+      }));
+      const missing = positions.filter(p => !p.held.length || (p.config.currency !== "CHF" && !p.fx?.length));
+      if (missing.length) return await done(false, `Kein vollständiger Kurs für ${missing.map(p => p.config.symbol).join(", ")}; kein neuer Gesamtwert`);
+      plan = planPortfolioValues({ entries, today, positions }).slice(-MAX_ROWS);
+    } else {
+      const proxy = await price.closes(PROXY_SYMBOL, since, f);
+      const usd = await fxSrc.rates("USD", since, f);
+      if (!proxy.length || !usd.length) return await done(false, "Kursquelle nicht erreichbar, kein neuer Wert");
+      plan = planValues({ entries, rules: depotRules(s), config: cfg, proxy, proxyFx: usd, held: [], heldFx: null, today }).slice(-MAX_ROWS);
     }
-    const plan = planValues({ entries, rules: depotRules(s), config: cfg, proxy, proxyFx: usd, held, heldFx, today }).slice(-MAX_ROWS);
     const exactUsed = plan.some((p) => !p.estimated);
-    const note = exactWanted && !held.length ? " (Produkt nicht gefunden, geschätzt)" : "";
+    const note = holdings.some(h => h.exchange === "TRADEGATE") ? " · Bewertung Tradegate EUR in CHF" : "";
     if (!plan.length) return await done(true, "Kein neuer Kurs" + note);
     await write(db, plan);
     const last = plan.at(-1)!;

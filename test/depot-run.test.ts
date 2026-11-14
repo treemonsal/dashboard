@@ -3,7 +3,7 @@ import { env, exports } from "cloudflare:workers";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../src/server/db/schema";
 import { depotDue, updateDepot } from "../src/server/depot/run";
-import { cboe, frankfurter, type FxSource, type PriceSource } from "../src/server/depot/kurse";
+import { tradegate, cboe, frankfurter, type FxSource, type PriceSource } from "../src/server/depot/kurse";
 
 const db = drizzle(env.DB, { schema });
 const NOW = new Date("2026-11-17T22:30:00Z"); // 23:30 in Zürich, Dienstag
@@ -17,6 +17,7 @@ const runs = async () => (await db.select().from(schema.syncRuns).all()).filter(
 
 beforeEach(async () => {
   for (const t of ["investment_entries", "sync_runs", "settings"]) await env.DB.exec(`DELETE FROM ${t}`);
+  await env.DB.exec("INSERT INTO settings (key,value) VALUES ('investHoldings','[]')");
 });
 
 describe("Depotlauf", () => {
@@ -53,6 +54,7 @@ describe("Depotlauf", () => {
   });
   it("genaue Rechnung mit Anteilen: nicht als geschätzt gekennzeichnet, mit Wechselkurs", async () => {
     await hand("2026-11-12", 1000);
+    await env.DB.exec("DELETE FROM settings WHERE key='investHoldings'");
     await env.DB.exec("INSERT INTO settings (key,value) VALUES ('investSymbol','VOO'),('investShares','2'),('investCurrency','USD')");
     const r = await updateDepot(env, { now: NOW, price: price({ SPY, VOO: closes([["2026-11-13", 500], ["2026-11-16", 400]]).map((c) => [c.date, c.close] as [string, number]) }), fx: fx([["2026-11-01", 0.8]]) });
     expect(r.added).toBe(2);
@@ -66,6 +68,7 @@ describe("Depotlauf", () => {
   });
   it("ISIN statt Kürzel: klare Meldung, nichts geschrieben", async () => {
     await hand("2026-11-12", 1000);
+    await env.DB.exec("DELETE FROM settings WHERE key='investHoldings'");
     await env.DB.exec("INSERT INTO settings (key,value) VALUES ('investSymbol','IE00B5BMR087'),('investShares','2')");
     const r = await updateDepot(env, { now: NOW, price: price({ SPY }), fx: fx([["2026-11-01", 1]]) });
     expect(r.ok).toBe(false);
@@ -104,5 +107,29 @@ describe("Kursquellen", () => {
     const ok = async () => new Response(JSON.stringify([{ date: "2026-11-13", base: "USD", quote: "CHF", rate: 0.83 }, { date: "2026-11-12", rate: "x" }]));
     expect(await frankfurter.rates("USD", "2026-11-01", ok as never)).toEqual([{ date: "2026-11-13", close: 0.83 }]);
     expect(await frankfurter.rates("USD", "2026-11-01", (async () => new Response("{}", { status: 429 })) as never)).toEqual([]);
+  });
+});
+
+
+describe("Mehrere ETF: Quellen und Lauf", () => {
+  it("Tradegate liest nur den ISIN passenden abgeschlossenen EUR Handelstag", async () => {
+    const html = '<meta name="description" content="Tradegate BSX, IE00BFMXXD54, Vanguard"><strong id="last">132,915</strong><span id="rt_datum">13.11.2026</span><span id="rt_zeit">22:00:00</span>Kurse in EUR';
+    expect(await tradegate.closes("IE00BFMXXD54", "2026-11-01", (async () => new Response(html)) as never, new Date("2026-11-14T10:00:00Z"))).toEqual([{ date: "2026-11-13", close: 132.915 }]);
+    expect(await tradegate.closes("IE00BMFKG444", "2026-11-01", (async () => new Response(html)) as never, new Date("2026-11-14T10:00:00Z"))).toEqual([]);
+    expect(await tradegate.closes("IE00BFMXXD54", "2026-11-01", (async () => new Response(html)) as never, new Date("2026-11-13T12:00:00Z"))).toEqual([]);
+  });
+  it("berechnet beide Positionen ohne Abhängigkeit von SPY", async () => {
+    await hand("2026-11-12", 1000);
+    await env.DB.prepare("INSERT OR REPLACE INTO settings (key,value) VALUES ('investHoldings',?)").bind(JSON.stringify([{ symbol: "VUAA", exchange: "TRADEGATE", shares: 2 }, { symbol: "XNAS", exchange: "TRADEGATE", shares: 3 }, { symbol: "NVDA", shares: 3 }])).run();
+    const r = await updateDepot(env, { now: NOW, price: price({ "IE00BFMXXD54": [["2026-11-13", 100]], "IE00BMFKG444": [["2026-11-13", 50]], "US67066G1040": [["2026-11-13", 150]] }), fx: fx([["2026-11-13", 0.9]]) });
+    expect(r).toMatchObject({ ok: true, added: 1 });
+    expect((await rows()).map(x => [x.date, x.amount, x.estimated])).toEqual([["2026-11-12", 1000, false], ["2026-11-13", 720, false]]);
+  });
+  it("fehlendes XNAS erzeugt keinen Gesamtwert aus VUAA oder SPY", async () => {
+    await hand("2026-11-12", 1000);
+    await env.DB.prepare("INSERT OR REPLACE INTO settings (key,value) VALUES ('investHoldings',?)").bind(JSON.stringify([{ symbol: "VUAA", exchange: "TRADEGATE", shares: 2 }, { symbol: "XNAS", exchange: "TRADEGATE", shares: 3 }])).run();
+    const r = await updateDepot(env, { now: NOW, price: price({ SPY, "IE00BFMXXD54": [["2026-11-13", 100]] }), fx: fx([["2026-11-13", 1]]) });
+    expect(r).toMatchObject({ ok: false, added: 0 });
+    expect(await rows()).toHaveLength(1);
   });
 });

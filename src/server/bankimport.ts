@@ -151,7 +151,7 @@ export async function recompute(db: Db): Promise<void> {
     const r = marked[i]!;
     const internal = !!r.internal || r.category === CAT.invest;
     const mealOut = isMeal({ ...r, internal }) ;
-    const repay = x.isRepayment || meals.repaymentRows.has(r);
+    const repay = x.repaymentOverride ?? meals.repaymentRows.has(r);
     if (internal !== x.internal || mealOut !== x.mealOut || repay !== x.isRepayment) {
       stmts.push(db.update(t.transactions).set({ internal, mealOut, isRepayment: repay, updatedAt: nowIso() }).where(eq(t.transactions.id, x.id)));
     }

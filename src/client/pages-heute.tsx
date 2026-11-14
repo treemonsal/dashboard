@@ -1,3 +1,4 @@
+import { QueryNotice, SaveNotice } from "./query-state";
 import { useState, type FormEvent } from "react";
 import { dayMonthLong, daysUntil, numberWord, weekdayLong, dayCompact, minutesOf, timeInZone } from "../shared/dates";
 import { parseQuick } from "../shared/parse";
@@ -47,7 +48,7 @@ export function Heute() {
   const untimed = d.list.filter((t) => !t.dueTime);
   const nextTask = [...timed, ...untimed].find((t) => !t.doneAt);
   const nextText = nextTask ? `${nextTask.title}${nextTask.dueTime ? ` · ${nextTask.dueTime}` : ""}` : d.training && !d.training.done ? "Gym" : "";
-  const title = d.total === 0 ? "Nichts geplant" : remaining === 0 ? "Alles erledigt" : remaining === 1 ? "Noch ein Ding" : `Noch ${numberWord(remaining)} Dinge`;
+  const title = d.error ? "Tag nicht vollständig geladen" : d.loading ? "Tag wird geladen" : d.total === 0 ? "Nichts geplant" : remaining === 0 ? "Alles erledigt" : remaining === 1 ? "Noch ein Ding" : `Noch ${numberWord(remaining)} Dinge`;
   const next = exams[0];
   const mx = Math.max(1, ...h7.rows.map((r) => r.sleepMin ?? 0));
   const sleepToday = sleep.latest;
@@ -80,17 +81,31 @@ export function Heute() {
             {nextText && <p>{nextText}</p>}
           </span>
         </button>
-        {d.total === 0 && !d.loading && <Link href="/aufgaben" className="chip btn press">Aufgabe hinzufügen</Link>}
+        {d.total === 0 && !d.loading && !d.error && <Link href="/aufgaben" className="chip btn press">Aufgabe hinzufügen</Link>}
       </div>
 
       <RestBar />
 
-      <YearCard />
+      <div className="card">
+        <h2>Dein Tag</h2>
+        <QueryNotice pending={d.loading || dayEvents.loading || tt.loading} error={d.error ?? dayEvents.error ?? tt.error} />
+        <div className="tl">
+          {dayItems({ day: d.today, tasks: d.list, events: dayEvents.events, lessons: tt.on(d.today), suggest: suggest(d.today, d.list, dayEvents.events, d.today) })}
+          {trainingRow}
+          <div className="slot pinned">
+            <span className="t">{s.sleepTime}</span>
+            <span className="dot" style={{ background: "var(--fg3)" }} />
+            <span className="w"><b>Schlafen</b></span>
+            <span className="chkhit"><span className="chk" /></span>
+          </div>
+        </div>
+      </div>
 
       <div className="tiles">
         <button type="button" className="tile press" onClick={() => sheet.open(<GeldSheet />)}>
           <span className="k">Übrig</span>
-          {money.summary.hasData ? (
+          <QueryNotice pending={money.loading} error={money.error} />
+          {money.loaded && money.summary.hasData ? (
             <>
               <span className="v"><Money v={money.summary.left} size={26} /></span>
               <Meter pct={money.budget ? (money.summary.spent / money.budget) * 100 : 0} />
@@ -101,9 +116,11 @@ export function Heute() {
         </button>
         <button type="button" className="tile press" onClick={() => sheet.open(<HealthSheet metric="sleep" />)}>
           <span className="k">Schlaf</span>
+          <QueryNotice pending={sleep.loading} error={sleep.error} />
           {sleepToday?.sleepMin != null ? (
             <>
               <span className="v">{Math.floor(sleepToday.sleepMin / 60)}<small>h</small> {String(sleepToday.sleepMin % 60).padStart(2, "0")}<small>m</small></span>
+              {sleepToday.day !== d.today && <span className="k">{dayCompact(sleepToday.day)}</span>}
               <span className="bars">{h7.rows.slice(-7).map((r) => (<i key={r.day} className={r.day === sleepToday.day ? "on" : ""} style={{ height: `${Math.round(((r.sleepMin ?? 0) / mx) * 100)}%` }} />))}</span>
             </>
           ) : (
@@ -112,6 +129,7 @@ export function Heute() {
         </button>
         <button type="button" className="tile press" onClick={() => sheet.open(<HealthSheet metric="steps" />)}>
           <span className="k">Schritte</span>
+          <QueryNotice pending={steps.loading} error={steps.error} />
           {stepsToday?.steps != null ? (
             <>
               <span className="v">{nf(stepsToday.steps)}</span>
@@ -130,19 +148,7 @@ export function Heute() {
         )}
       </div>
 
-      <div className="card">
-        <h2>Dein Tag</h2>
-        <div className="tl">
-          {dayItems({ day: d.today, tasks: d.list, events: dayEvents.events, lessons: tt.on(d.today), suggest: suggest(d.today, d.list, dayEvents.events, d.today) })}
-          {trainingRow}
-          <div className="slot pinned">
-            <span className="t">{s.sleepTime}</span>
-            <span className="dot" style={{ background: "var(--fg3)" }} />
-            <span className="w"><b>Schlafen</b></span>
-            <span className="chkhit"><span className="chk" /></span>
-          </div>
-        </div>
-      </div>
+      <YearCard />
 
       <GymCard />
       <ExamsCard />
@@ -156,7 +162,8 @@ type Seg = "eingang" | "heute" | "demnaechst" | "projekte";
 export function Aufgaben() {
   const today = useToday();
   const tasks = useTasks();
-  const projects = useProjects().data ?? [];
+  const projectQuery = useProjects();
+  const projects = projectQuery.data ?? [];
   const create = useCreateTask();
   const createProject = useCreateProject();
   const [seg, setSeg] = useState<Seg>("heute");
@@ -169,7 +176,7 @@ export function Aufgaben() {
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (!parsed || !parsed.title) return;
+    if (!parsed || !parsed.title || create.isPending) return;
     create.mutate({
       id: crypto.randomUUID(),
       title: parsed.title,
@@ -178,9 +185,10 @@ export function Aufgaben() {
       durationMin: parsed.durationMin,
       recurrence: parsed.recurrence,
       projectId: seg === "projekte" ? openProject : null,
-    });
-    setText("");
-    if (seg !== "projekte" || !openProject) setSeg(parsed.dueDate ? (parsed.dueDate <= today ? "heute" : "demnaechst") : "eingang");
+    }, { onSuccess: () => {
+      setText((current) => current === text ? "" : current);
+      if (seg !== "projekte" || !openProject) setSeg(parsed.dueDate ? (parsed.dueDate <= today ? "heute" : "demnaechst") : "eingang");
+    } });
   }
 
   const groups: [string, typeof all][] = [];
@@ -197,10 +205,12 @@ export function Aufgaben() {
       <div className="qtop">
         <form onSubmit={submit}>
           <input value={text} onChange={(e) => setText(e.target.value)} placeholder={seg === "projekte" && openProject ? "Neue Aufgabe im Projekt" : "Neue Aufgabe"} maxLength={500} aria-label="Neue Aufgabe" enterKeyHint="send" />
-          <button type="submit" className="press" disabled={!parsed?.title} aria-label="Hinzufügen" onPointerDown={(e) => e.preventDefault()}><Icon n="up" /></button>
+          <button type="submit" className="press" disabled={!parsed?.title || create.isPending} aria-label="Hinzufügen" onPointerDown={(e) => e.preventDefault()}><Icon n="up" /></button>
         </form>
         {chips.length > 0 && <div className="chips">{chips.map((c) => (<span key={String(c)}>{c}</span>))}</div>}
       </div>
+      <SaveNotice error={create.error ?? createProject.error} />
+      <QueryNotice pending={tasks.isPending || (seg === "projekte" && projectQuery.isPending)} error={tasks.error ?? (seg === "projekte" ? projectQuery.error : null)} />
       <div className="seg full" role="group" aria-label="Ansicht">
         {([["eingang", "Eingang", lists.eingang.length], ["heute", "Heute", lists.heute.filter((t) => !t.doneAt).length], ["demnaechst", "Demnächst", lists.demnaechst.length], ["projekte", "Projekte", all.filter((t) => t.projectId && !t.parentId && !t.doneAt).length]] as [Seg, string, number][]).map(([k, l, n]) => (
           <button key={k} type="button" className="press" aria-pressed={seg === k} onClick={() => setSeg(k)} >
@@ -237,7 +247,7 @@ export function Aufgaben() {
               </div>
             );
           })}
-          <form className="card" style={{ display: "flex", gap: 8, padding: 8 }} onSubmit={(e) => { e.preventDefault(); const n = pName.trim(); if (n) { createProject.mutate({ id: crypto.randomUUID(), name: n }); setPName(""); } }}>
+          <form className="card" style={{ display: "flex", gap: 8, padding: 8 }} onSubmit={(e) => { e.preventDefault(); const n = pName.trim(); if (n && !createProject.isPending) { createProject.mutate({ id: crypto.randomUUID(), name: n }, { onSuccess: () => setPName((current) => current === pName ? "" : current) }); } }}>
             <input className="inp grow" style={{ background: "none" }} placeholder="Neues Projekt" value={pName} onChange={(e) => setPName(e.target.value)} maxLength={120} aria-label="Neues Projekt" />
           </form>
         </>

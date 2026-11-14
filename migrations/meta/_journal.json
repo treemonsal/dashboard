@@ -64,6 +64,13 @@
       "when": 1794682089327,
       "tag": "0008_depot",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794684962017,
+      "tag": "0009_integrity",
+      "breakpoints": true
     }
   ]
 }

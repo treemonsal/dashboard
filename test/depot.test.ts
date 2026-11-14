@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { depositedAt, depotState, monthlyCount, planValues, type Close, type DepotConfig, type DepotEntry } from "../src/shared/depot";
+import { depotHoldings, portfolioProduct, planPortfolioValues, depositedAt, depotState, monthlyCount, planValues, type Close, type DepotConfig, type DepotEntry } from "../src/shared/depot";
 
 const rules = { monthly: 350, day: 25 };
 const val = (date: string, amount: number, estimated = false): DepotEntry => ({ kind: "value", date, amount, estimated });
@@ -115,5 +115,45 @@ describe("Depot: genaue Rechnung", () => {
     expect(planValues({ ...o, heldFx: null, config: { symbol: "VOO", shares: 4, currency: "USD" } })).toEqual([]);
     // Produkt konfiguriert, aber keine Kurse: keine Schätzung unterschieben
     expect(planValues({ ...o, held: [], config: { symbol: "VOO", shares: 4, currency: "USD" } }).every((x) => x.estimated)).toBe(true);
+  });
+});
+
+
+describe("Mehrere ETF im Depot", () => {
+  it("behält alte Einzelpositionen bei und liest beide neuen Positionen getrennt", () => {
+    expect(depotHoldings({ investSymbol: "VOO", investShares: "2", investCurrency: "USD", investHoldings: "" })).toEqual([{ symbol: "VOO", shares: 2, currency: "USD", exchange: "US" }]);
+    expect(depotHoldings({ investSymbol: "VOO", investShares: "2", investCurrency: "USD", investHoldings: JSON.stringify([{ symbol: "VUAA", shares: 2 }, { symbol: "XNAS", shares: 3 }]) })).toEqual([{ symbol: "VUAA", exchange: "TRADEGATE", shares: 2, currency: "EUR" }, { symbol: "XNAS", exchange: "TRADEGATE", shares: 3, currency: "EUR" }]);
+  });
+  it("nutzt bestätigte Mengen nur ohne bisherige Konfiguration", () => {
+    expect(depotHoldings({ investSymbol: "", investShares: "", investCurrency: "USD" })).toEqual([
+      { symbol: "VUAA", shares: 12.2, currency: "EUR", exchange: "TRADEGATE" },
+      { symbol: "XNAS", shares: 23, currency: "EUR", exchange: "TRADEGATE" },
+      { symbol: "NVDA", shares: 3, currency: "EUR", exchange: "TRADEGATE" },
+    ]);
+    expect(depotHoldings({ investSymbol: "VOO", investShares: "2", investCurrency: "USD", investHoldings: "[]" })).toEqual([]);
+  });
+  it("kennt die drei Wertpapiere eindeutig mit EUR Bewertungsquelle", () => {
+    expect(portfolioProduct("VUAA")).toMatchObject({ isin: "IE00BFMXXD54", currency: "EUR", index: "S&P 500" });
+    expect(portfolioProduct("XNAS")).toMatchObject({ isin: "IE00BMFKG444", currency: "EUR", index: "Nasdaq 100" });
+    expect(portfolioProduct("NVDA")).toMatchObject({ isin: "US67066G1040", currency: "EUR" });
+    expect(portfolioProduct("unknown")).toBeNull();
+  });
+  it("summiert beide ETF je gemeinsamem Kurstag mit der richtigen Umrechnung", () => {
+    const r = planPortfolioValues({ entries: [val("2026-11-12", 1000)], today: "2026-11-17", positions: [
+      { config: { symbol: "VUAA", shares: 2, currency: "USD" }, held: closes([["2026-11-13", 100], ["2026-11-16", 110]]), fx: closes([["2026-11-13", 0.8]]) },
+      { config: { symbol: "XNAS", shares: 3, currency: "EUR" }, held: closes([["2026-11-13", 50], ["2026-11-17", 60]]), fx: closes([["2026-11-13", 0.9]]) },
+    ] });
+    expect(r).toEqual([{ date: "2026-11-13", amount: 295, estimated: false }]);
+  });
+  it("fehlender Kurs einer Position ergibt keinen Teilwert und keine SPY Schätzung", () => {
+    expect(planPortfolioValues({ entries: [val("2026-11-12", 1000)], today: "2026-11-17", positions: [
+      { config: { symbol: "VUAA", shares: 2, currency: "USD" }, held: closes([["2026-11-13", 100]]), fx: fx1 },
+      { config: { symbol: "XNAS", shares: 3, currency: "CHF" }, held: [], fx: null },
+    ] })).toEqual([]);
+  });
+  it("unvollständige oder beschädigte Konfiguration fällt nicht auf alte Position zurück", () => {
+    const old = { investSymbol: "VOO", investShares: "2", investCurrency: "USD" };
+    expect(depotHoldings({ ...old, investHoldings: "broken" })).toBeNull();
+    expect(depotHoldings({ ...old, investHoldings: '[{"symbol":"VUAA","exchange":"","shares":0}]' })).toBeNull();
   });
 });

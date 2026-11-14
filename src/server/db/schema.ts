@@ -92,6 +92,10 @@ export const tasks = sqliteTable(
     priority: integer("priority").notNull().default(4),
     // Wiederholungsregel als RRULE-Text (RFC 5545), z.B. "FREQ=MONTHLY;BYMONTHDAY=1"
     recurrence: text("recurrence"),
+    // Herkunft ist eindeutig; alte, nicht verknüpfte Aufgaben werden niemals beim Rückgängigmachen gelöscht.
+    predecessorId: text("predecessor_id").references((): AnySQLiteColumn => tasks.id, { onDelete: "set null" }),
+    recurrenceUntouched: integer("recurrence_untouched", { mode: "boolean" }).notNull().default(false),
+    mutationId: text("mutation_id").notNull().default(""),
     durationMin: integer("duration_min"),
     examId: text("exam_id").references(() => exams.id, { onDelete: "set null" }),
     doneAt: text("done_at"),
@@ -99,6 +103,7 @@ export const tasks = sqliteTable(
     ...timestamps,
   },
   (t) => [
+    uniqueIndex("tasks_predecessor_uq").on(t.predecessorId),
     index("tasks_due_idx").on(t.dueDate),
     index("tasks_parent_idx").on(t.parentId),
     index("tasks_project_idx").on(t.projectId),
@@ -286,6 +291,8 @@ export const transactions = sqliteTable(
     mealOut: integer("meal_out", { mode: "boolean" }).notNull().default(false),
     // Eingehende Rückzahlung der Mutter: keine Einnahme, wird gegen offene Mahlzeiten verrechnet
     isRepayment: integer("is_repayment", { mode: "boolean" }).notNull().default(false),
+    // null = automatische Erkennung, true/false = ausdrückliche manuelle Vorgabe.
+    repaymentOverride: integer("repayment_override", { mode: "boolean" }),
     // Von Hand als beglichen markiert
     settledAt: text("settled_at"),
     // Bank-Import: Hash der Buchung (Doppelte werden übersprungen), Verbuchungszeit, Währung des Originals
@@ -399,6 +406,7 @@ export const healthConnection = sqliteTable("health_connection", {
   accessExpiresAt: text("access_expires_at"),
   scope: text("scope"),
   connectedAt: text("connected_at").notNull().default(now),
+  syncThrough: text("sync_through"), // exklusives Ende des letzten vollständig gelesenen Bereichs
   lastError: text("last_error"),
   updatedAt: text("updated_at").notNull().default(now),
 });

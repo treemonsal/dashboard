@@ -81,6 +81,44 @@ describe("Abgleich", () => {
     expect(await runs()).toHaveLength(2);
   });
 
+  it("holt eine lange Lücke in begrenzten Bereichen lückenlos nach", async () => {
+    await connect();
+    await db.insert(schema.syncRuns).values({ id: "old-success", kind: "fitbit", ok: true, at: "2026-09-01T08:00:00.000Z" });
+    const ranges: [string, string][] = [];
+    const provider = { ...PROVIDER, fetchRange: async (_env: HealthEnv, _token: string, from: string, to: string) => {
+      ranges.push([from, to]);
+      return { days: [{ day: from, steps: 1234, sleepMin: null, restingHr: null, weightKg: null }], workouts: [], problems: [] };
+    } };
+    for (let i = 0; i < 3; i++) expect((await syncHealth(e, { provider, now: NOW })).ok).toBe(true);
+    expect(ranges).toEqual([["2026-08-31", "2026-09-30"], ["2026-09-30", "2026-10-30"], ["2026-10-30", "2026-11-15"]]);
+    expect((await db.select().from(schema.healthDaily)).map((d) => d.day)).toEqual(["2026-08-31", "2026-09-30", "2026-10-30"]);
+  });
+  it("überspringt bei Teilfehlern keinen Zeitraum", async () => {
+    await connect();
+    await db.insert(schema.syncRuns).values({ id: "old-partial", kind: "fitbit", ok: true, at: "2026-09-01T08:00:00.000Z" });
+    const ranges: [string, string][] = [];
+    const provider = { ...PROVIDER, fetchRange: async (_env: HealthEnv, _token: string, from: string, to: string) => {
+      ranges.push([from, to]);
+      return { days: [], workouts: [], problems: ranges.length === 1 ? ["Gewicht: nicht erreichbar"] : [] };
+    } };
+    expect((await syncHealth(e, { provider, now: NOW })).ok).toBe(false);
+    expect((await syncHealth(e, { provider, now: NOW })).ok).toBe(true);
+    expect((await syncHealth(e, { provider, now: NOW })).ok).toBe(true);
+    expect(ranges).toEqual([["2026-08-31", "2026-09-30"], ["2026-08-31", "2026-09-30"], ["2026-09-30", "2026-10-30"]]);
+  });
+
+  it("behält nach dem ersten Teilfehler auch über Mitternacht den Beginn bei", async () => {
+    await connect();
+    const ranges: [string, string][] = [];
+    const provider = { ...PROVIDER, fetchRange: async (_env: HealthEnv, _token: string, from: string, to: string) => {
+      ranges.push([from, to]);
+      return { days: [], workouts: [], problems: ranges.length === 1 ? ["Schlaf: nicht erreichbar"] : [] };
+    } };
+    expect((await syncHealth(e, { provider, now: NOW })).ok).toBe(false);
+    expect((await syncHealth(e, { provider, now: new Date("2026-11-15T08:30:00Z"), fetcher: fakeGoogle().fetcher })).ok).toBe(true);
+    expect(ranges).toEqual([["2026-10-16", "2026-11-15"], ["2026-10-16", "2026-11-15"]]);
+  });
+
   it("von Hand eingetragene Werte bleiben, wenn die Antwort sie nicht enthält", async () => {
     await connect();
     await db.insert(schema.healthDaily).values({ day: "2026-11-13", weightKg: 70.5, source: "manual" });

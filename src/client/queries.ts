@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { api } from "./api";
 import { notify } from "./toast";
+import { errorMessage } from "./query-state";
 import { addDays, mondayOf, todayInZone } from "../shared/dates";
 import { visibleEvents } from "../shared/agenda";
 import { blocksOn, type LessonBlock } from "../shared/stundenplan";
@@ -60,9 +61,9 @@ function useOpt<V, D>(o: { key: QueryKey | ((v: V) => QueryKey); fn: (v: V) => P
       if (o.apply && prev !== undefined) qc.setQueryData<D>(key, o.apply(prev, v));
       return { prev, key };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (error, _v, ctx) => {
       if (ctx) qc.setQueryData(ctx.key, ctx.prev);
-      notify("Nicht gespeichert");
+      notify(`Nicht gespeichert. ${errorMessage(error)}`);
     },
     onSuccess: (r, v) => o.after?.(r, v),
     onSettled: (_r, _e, v) => {
@@ -104,7 +105,7 @@ export function useUpdateTask() {
 }
 export const useToggleTask = () => {
   const u = useUpdateTask();
-  return { mutate: (id: string, done: boolean) => u.mutate({ id, patch: { done } }) };
+  return { ...u, mutate: (id: string, done: boolean, options?: Parameters<typeof u.mutate>[1]) => u.mutate({ id, patch: { done } }, options) };
 };
 export function useDeleteTask() {
   return useOpt<string, S.Task[]>({ key: keys.tasks, fn: (id) => api.tasks.remove(id), apply: (d, id) => d.filter((t) => t.id !== id && t.parentId !== id) });
@@ -118,8 +119,9 @@ export function useCreateProject() {
 }
 
 /* ---------- Einstellungen ---------- */
+export const useSettingsQuery = () => useQuery({ queryKey: keys.settings, queryFn: api.settings.get });
 export function useSettings(): S.Settings {
-  const q = useQuery({ queryKey: keys.settings, queryFn: api.settings.get });
+  const q = useSettingsQuery();
   return q.data ?? SETTING_DEFAULTS;
 }
 export function useSetSetting() {
@@ -188,7 +190,7 @@ export function useGymDays(weeks = 16) {
   const today = useToday();
   const from = addDays(mondayOf(today), -(weeks - 1) * 7);
   const q = useQuery({ queryKey: keys.gymDays(from), queryFn: () => api.gym.days(from, addDays(today, 1)) });
-  return { from, done: new Set((q.data ?? []).filter((d) => d.finished).map((d) => d.day)), loaded: !q.isPending };
+  return { from, done: new Set((q.data ?? []).filter((d) => d.finished).map((d) => d.day)), loaded: q.isSuccess, loading: q.isPending, error: q.error };
 }
 export function useSavePlan() {
   return useOpt<{ id?: string; plan: S.GymPlanWrite }, S.GymPlan[]>({
@@ -267,7 +269,7 @@ export function useHealth(days: number) {
   const to = useToday();
   const from = addDays(to, -(days - 1));
   const q = useQuery({ queryKey: keys.health(from, to), queryFn: () => api.health.list(from, to) });
-  return { from, to, rows: q.data ?? [], loaded: !q.isPending };
+  return { from, to, rows: q.data ?? [], loaded: q.isSuccess, loading: q.isPending, error: q.error };
 }
 export function usePutHealth() {
   const qc = useQueryClient();
@@ -292,7 +294,7 @@ export function useEvents(from: string, to: string) {
     const names = new Map((subjects ?? []).map((s) => [s.code, s.name ?? null]));
     return visibleEvents(q.data ?? [], { hideHomework: hide, exams: (exams ?? []).map((e) => ({ date: e.date, subjectCode: e.subjectCode, subjectName: names.get(e.subjectCode) ?? null })) });
   }, [q.data, exams, subjects, hide]);
-  return { events, loaded: !q.isPending };
+  return { events, loaded: q.isSuccess, loading: q.isPending, error: q.error };
 }
 
 /** Stundenplan: `has` sagt, ob überhaupt einer da ist; `on(day)` liefert die Lektionsblöcke eines Tages (ohne Schulferien). */
@@ -302,8 +304,8 @@ export function useTimetable() {
   const lessons = q.data?.lessons;
   return useMemo(() => {
     const list = lessons ?? [];
-    return { has: list.length > 0, holidayUntil: until, on: (day: string): LessonBlock[] => blocksOn(list, day, until || null) };
-  }, [lessons, until]);
+    return { loaded: q.isSuccess, loading: q.isPending, error: q.error, has: list.length > 0, holidayUntil: until, on: (day: string): LessonBlock[] => blocksOn(list, day, until || null) };
+  }, [lessons, until, q.isSuccess, q.isPending, q.error]);
 }
 
 export function useAddCalendar() {

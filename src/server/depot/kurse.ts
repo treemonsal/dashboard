@@ -69,3 +69,31 @@ export const frankfurter: FxSource = {
     }
   },
 };
+
+/** Öffentliche Tradegate Seite: letzter Kurs eines bereits abgeschlossenen Handelstags, EUR.
+ * Keine historische Rückrechnung. ISIN, Währung und Datum müssen in der Antwort stimmen.
+ */
+export const tradegate = {
+  name: "tradegate",
+  async closes(isin: string, since: string, f: Fetcher, now = new Date()): Promise<Close[]> {
+    if (!["IE00BFMXXD54", "IE00BMFKG444", "US67066G1040"].includes(isin)) return [];
+    try {
+      const res = await f(`https://www.tradegatebsx.com/orderbuch.php?isin=${isin}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+      if (!res.ok) return [];
+      const html = await res.text();
+      if (!html.includes(`Tradegate BSX, ${isin},`) || !html.includes("Kurse in EUR")) return [];
+      const number = html.match(/id="last"[^>]*>\s*([\d.,]+)\s*</)?.[1];
+      const d = html.match(/id="rt_datum"[^>]*>\s*(\d{2})\.(\d{2})\.(\d{4})\s*</);
+      if (!number || !d) return [];
+      const close = Number(number.replace(/\./g, "").replace(",", "."));
+      const date = `${d[3]}-${d[2]}-${d[1]}`;
+      const day = new Date(`${date}T00:00:00Z`);
+      if (!Number.isFinite(day.getTime()) || day.toISOString().slice(0, 10) !== date || day.getUTCDay() === 0 || day.getUTCDay() === 6) return [];
+      const parts = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" }).format(now);
+      const today = parts.slice(0, 10);
+      // Die Seite liefert intraday denselben Datensatz. Erst nach Ende der Handelssitzung verwenden.
+      if (date > today || (date === today && Number(parts.slice(11, 13)) < 23) || date < since || !Number.isFinite(close) || close <= 0) return [];
+      return [{ date, close }];
+    } catch { return []; }
+  },
+};

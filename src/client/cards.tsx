@@ -1,4 +1,5 @@
 // Karten, die auf mehreren Seiten vorkommen (Entwurf: data-v="heute ziele ...").
+import { QueryNotice } from "./query-state";
 import { Link } from "./router";
 import { dayCompact, daysUntil, mondayOf, addDays, weekdayNum } from "../shared/dates";
 import { useSheet } from "./sheet";
@@ -9,7 +10,8 @@ import { useExams, useGrades, useGymDays, useGymPlans, useSettings, useSubjects,
 
 export function YearCard() {
   const today = useToday();
-  const exams = useExams().data ?? [];
+  const examQuery = useExams();
+  const exams = examQuery.data ?? [];
   const y = Number(today.slice(0, 4));
   const total = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 366 : 365;
   const doy = Math.round((Date.UTC(y, Number(today.slice(5, 7)) - 1, Number(today.slice(8, 10))) - Date.UTC(y, 0, 1)) / 86400000) + 1;
@@ -33,8 +35,10 @@ export function GymCard() {
   const today = useToday();
   const sheet = useSheet();
   const goal = Number(useSettings().gymGoal);
-  const { from, done } = useGymDays(16);
-  const planned = new Set(useGymPlans().data?.flatMap((p) => p.weekdays) ?? []);
+  const gym = useGymDays(16);
+  const { from, done } = gym;
+  const plans = useGymPlans();
+  const planned = new Set(plans.data?.flatMap((p) => p.weekdays) ?? []);
   const monday = mondayOf(today);
   const week = Array.from({ length: 7 }, (_, r) => addDays(monday, r));
   // Verpasst zählt erst ab dem ersten eingetragenen Training, nicht für die Zeit vor der App.
@@ -55,6 +59,7 @@ export function GymCard() {
           {n} von {goal}
         </span>
       </h2>
+      <QueryNotice pending={gym.loading || plans.isPending} error={gym.error ?? plans.error} />
       <div className="gym" role="group" aria-label="Gym-Raster der letzten 16 Wochen">
         {cells.map(({ d, r }) =>
           d > today ? (
@@ -72,8 +77,10 @@ export function GymCard() {
 }
 
 export function ExamsCard({ limit = 4 }: { limit?: number }) {
-  const exams = useExams().data ?? [];
+  const examQuery = useExams();
+  const exams = examQuery.data ?? [];
   const sheet = useSheet();
+  if (!examQuery.isSuccess) return <div className="card"><h2>Prüfungen</h2><QueryNotice pending={examQuery.isPending} error={examQuery.error} /></div>;
   if (!exams.length) return null;
   return (
     <div className="card">
@@ -98,10 +105,13 @@ export function ExamsCard({ limit = 4 }: { limit?: number }) {
 }
 
 export function NotenCard() {
-  const subjects = useSubjects().data ?? [];
-  const grades = useGrades().data ?? [];
+  const subjectsQuery = useSubjects();
+  const gradesQuery = useGrades();
+  const subjects = subjectsQuery.data ?? [];
+  const grades = gradesQuery.data ?? [];
   const sheet = useSheet();
   const rows = subjectAverages(subjects, grades);
+  if (!subjectsQuery.isSuccess || !gradesQuery.isSuccess) return <div className="card"><h2>Noten</h2><QueryNotice pending={subjectsQuery.isPending || gradesQuery.isPending} error={subjectsQuery.error ?? gradesQuery.error} /></div>;
   const avg = gesamt(rows);
   const counted = rows.filter((r) => r.counts);
   // Nicht zählende Fächer nur zur Information: getrennt am Ende, gedämpft, ohne Rot, ohne Zielstrich. Ohne Note gar nicht.
