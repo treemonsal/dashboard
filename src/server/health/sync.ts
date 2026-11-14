@@ -6,6 +6,7 @@ import { addDays, todayInZone } from "../../shared/dates";
 import { newId, nowIso, type Db } from "../util";
 import { decryptToken, encryptToken } from "./crypto";
 import { googleHealth } from "./google";
+import { withCredentials } from "./credentials";
 import { HealthError, type DayValues, type HealthEnv, type HealthProvider, type TokenSet, type Workout } from "./types";
 
 export const PROVIDER = googleHealth;
@@ -106,11 +107,12 @@ async function record(db: Db, ok: boolean, message: string): Promise<void> {
   await db.insert(syncRuns).values({ id: newId(), kind: KIND, ok, message: short(message) });
 }
 
-export async function syncHealth(env: HealthEnv, deps: HealthSyncDeps = {}): Promise<HealthSyncResult> {
+export async function syncHealth(rawEnv: HealthEnv, deps: HealthSyncDeps = {}): Promise<HealthSyncResult> {
   const provider = deps.provider ?? PROVIDER;
   const f = deps.fetcher ?? fetch;
   const now = deps.now ?? new Date();
-  const db: Db = drizzle(env.DB, { schema });
+  const db: Db = drizzle(rawEnv.DB, { schema });
+  const env = await withCredentials(rawEnv, db);
 
   const conn = await db.select({ id: healthConnection.id }).from(healthConnection).where(eq(healthConnection.id, provider.id)).get();
   if (!conn) return { ok: false, message: "Nicht verbunden", days: 0, workouts: 0, connected: false };
@@ -154,9 +156,10 @@ export async function syncHealth(env: HealthEnv, deps: HealthSyncDeps = {}): Pro
 }
 
 /** Trennt: Zugang bei Google widerrufen (best effort) und alle gespeicherten Tokens löschen. Messwerte bleiben. */
-export async function disconnectHealth(env: HealthEnv, deps: { fetcher?: typeof fetch; provider?: HealthProvider } = {}): Promise<boolean> {
+export async function disconnectHealth(rawEnv: HealthEnv, deps: { fetcher?: typeof fetch; provider?: HealthProvider } = {}): Promise<boolean> {
   const provider = deps.provider ?? PROVIDER;
-  const db: Db = drizzle(env.DB, { schema });
+  const db: Db = drizzle(rawEnv.DB, { schema });
+  const env = await withCredentials(rawEnv, db);
   const conn = await db.select().from(healthConnection).where(eq(healthConnection.id, provider.id)).get();
   if (!conn) return false;
   try {

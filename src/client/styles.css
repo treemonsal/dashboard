@@ -212,6 +212,19 @@
   .seg.tri button[aria-pressed="true"][data-k="1"] { background: var(--orange); color: #000; }
   .seg.tri button[aria-pressed="true"][data-k="2"] { background: var(--green); color: #000; }
   .seg.full { display: flex; width: 100%; } .seg.full button { flex: 1; }
+  /* Fitbit: Einrichtungsblatt und Hinweis */
+  .fs-l { list-style: none; margin: 0; padding: 0; }
+  .fs { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 14px 0; }
+  .fs + .fs { border-top: 1px solid var(--line); }
+  .fs-n { width: 32px; height: 32px; border-radius: 50%; background: var(--card2); color: var(--fg2); display: grid; place-items: center; font-size: var(--t-sm); font-weight: 700; }
+  .fs-n[aria-pressed="true"] { background: var(--fg); color: #000; }
+  .fs-n svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  .fs-b p { margin: 4px 0 0; font-size: var(--t-md); line-height: 1.35; }
+  .fs-a { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .fs-f { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; width: 100%; }
+  .fs-ok { color: var(--fg2); font-size: var(--t-md); }
+  .fs-note { color: var(--fg3); font-size: var(--t-xs); line-height: 1.4; margin: 14px 0 0; }
+  .fs-hint { color: var(--fg2); font-size: var(--t-md); margin: -6px 0 14px; }
   .cta { margin-top: 18px; width: 100%; min-height: 52px; border-radius: 99px; background: var(--fg); color: #000; font-weight: 600; font-size: var(--t-body); text-align: center; display: grid; place-items: center; }
   .cta.ghost { background: var(--card2); color: var(--fg); }
   .cta.danger { background: var(--red); color: #000; }

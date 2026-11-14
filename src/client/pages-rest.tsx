@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AbgleichLaeufe, VerbundeneApps } from "./einstellungen-apps";
 import { FitbitEinstellungen, FitbitLeer } from "./fitbit";
+import { Trainings } from "./fitbit-setup";
 import { ErinnerungenEinstellungen, KalenderEinstellungen } from "./einstellungen-kalender";
 import { addDays, dayCompact, daysBetween, daysUntil, mondayOf, minutesOf, timeInZone, monthLong, WEEKDAY_LETTERS, WEEK_ORDER, weekdayNum } from "../shared/dates";
 import { byCategory, ownShare } from "../shared/geld";
@@ -190,6 +191,7 @@ export function Koerper() {
         <Stat k="Ruhepuls" metric="hr" v={hr.latest?.restingHr != null ? String(hr.latest.restingHr) : null} unit="bpm" />
         <Stat k="Gewicht" metric="weight" v={w.latest?.weightKg != null ? nf(w.latest.weightKg, 1) : null} unit="kg" />
       </div>
+      <Trainings />
       <GymCard />
     </div>
   );

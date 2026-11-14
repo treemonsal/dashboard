@@ -382,6 +382,16 @@ export const healthConnection = sqliteTable("health_connection", {
   updatedAt: text("updated_at").notNull().default(now),
 });
 
+// Zugangsdaten (OAuth-Client) aus der App, eine Zeile pro Anbieter. ID und Secret nur verschlüsselt (AES-GCM, Schlüssel HEALTH_TOKEN_KEY);
+// idTail = letzte 4 Zeichen der ID, die einzige Angabe, die je angezeigt wird.
+export const healthCredentials = sqliteTable("health_credentials", {
+  id: text("id").primaryKey(),
+  clientIdEnc: text("client_id_enc").notNull(),
+  clientSecretEnc: text("client_secret_enc").notNull(),
+  idTail: text("id_tail").notNull(),
+  updatedAt: text("updated_at").notNull().default(now),
+});
+
 // Laufende Anmeldungen (state + PKCE-Verifier), höchstens 10 Minuten gültig, einmal verwendbar.
 export const healthOauthState = sqliteTable("health_oauth_state", {
   state: text("state").primaryKey(),

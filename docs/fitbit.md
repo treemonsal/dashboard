@@ -29,40 +29,32 @@ Quellen
 ## 2. Was gebaut ist
 
 - Tabellen (Migration `0005_gesundheit`): `health_connection` (Tokens, verschlüsselt), `health_oauth_state` (laufende Anmeldung), `health_workouts` (Trainings). Schlaf, Schritte, Ruhepuls, Gewicht gehen in die bestehende `health_daily` (Quelle `fitbit`).
-- Tokens: AES-256-GCM, Schlüssel aus dem Secret `HEALTH_TOKEN_KEY`. Client-ID und Secret nur als Worker-Secrets. Nichts davon in Code, Antworten, Logs oder `sync_runs`.
+- Tokens: AES-256-GCM, Schlüssel aus dem Secret `HEALTH_TOKEN_KEY`. Client-ID und Secret in der App eingetragen (verschlüsselt in D1) oder als Worker-Secrets. Nichts davon in Code, Antworten, Logs oder `sync_runs`.
 - Routen (alle hinter Cloudflare Access): `GET /api/fitbit/status`, `POST /api/fitbit/connect`, `GET /api/fitbit/callback`, `POST /api/fitbit/sync`, `DELETE /api/fitbit/connection`, `GET /api/fitbit/workouts`.
 - Abgleich `syncHealth(env)`: beim ersten Verbinden die letzten 30 Tage, danach die letzten 3 Tage (so kommen spät übertragene Werte nach). Der Cron (alle 5 Minuten) startet ihn einmal pro Zürcher Tag ab 08:00, nicht nachts: der Schlaf endet erst, wenn du aufwachst, und das Fitbit überträgt erst dann. Nach einem Fehler versucht er es nach etwa einer Stunde wieder. Dazu der Knopf "Jetzt abgleichen".
 - Zuordnung: Schlaf zählt zum Tag des Aufwachens (Europe/Zurich), Minuten Schlaf ohne Wachphasen, Nickerchen zählen nicht, mehrteilige Nächte werden addiert. Gewicht: letzte Wägung des Tages. Training: Tag des Beginns, Dauer, Kalorien, mittlerer Puls. Fehlt ein Wert in der Antwort, bleibt ein vorhandener (auch von Hand eingetragener) stehen.
 - Fehler werden ehrlich gemeldet: je Messgrösse ("Gewicht: Keine Berechtigung …"), abgelaufener Zugang als "Neu verbinden", alles in `sync_runs` (Art `fitbit`).
 - Oberfläche: Einstellungen, Abschnitt "Fitbit" (verbinden, Status, abgleichen, trennen) und der Leerzustand im Körper-Tab.
-- Trainings werden gespeichert, aber noch nirgends angezeigt (nur über `/api/fitbit/workouts`).
+- Trainings: Liste der letzten im Körper-Tab, Blatt mit Details. Sie zählen nicht automatisch als Gym; das Trainingsblatt des Tages zeigt nur den Hinweis "Fitbit hat Krafttraining erkannt".
+- Zugangsdaten: Tabelle `health_credentials` (Migration 0006), AES-256-GCM mit `HEALTH_TOKEN_KEY`; `credentials.ts` löst sie auf (App vor Worker-Secrets).
 
-## 3. Anleitung für dich (einmalig, etwa 20 Minuten)
+## 3. Einrichtung (in der App, etwa 20 Minuten)
 
-Du brauchst das Google-Konto, mit dem dein Fitbit Air verbunden ist.
+Du brauchst nur die App: Körper-Tab, "Einrichten" (oder Einstellungen, Fitbit, "Einrichten"). Das Blatt führt durch sieben Schritte, je mit "Öffnen" (direkter Link in die Google Cloud Console) und, wo nötig, "Kopieren". Abgehakte Schritte bleiben gespeichert. Kein Terminal, keine Secrets.
 
-Wichtig vorab: Die Google Cloud Console ist ein Entwicklerwerkzeug. Ob du mit 15 selber ein Projekt anlegen darfst, konnte ich nicht klären (Altersgrenzen stehen in den Nutzungsbedingungen von Google Cloud, die ich nicht gefunden habe). Falls Google dich blockiert: ein Elternteil legt das Projekt in seinem Konto an. Das Projekt darf einem anderen Konto gehören, du meldest dich später trotzdem mit deinem eigenen Fitbit-Konto an (dann musst du als Testnutzer eingetragen sein, siehe Schritt 5).
+1. Projekt "Dashboard" anlegen (console.cloud.google.com/projectcreate).
+2. "Google Health API" aktivieren (console.developers.google.com/apis/library/health.googleapis.com).
+3. Zielgruppe "Extern", deine E-Mail als Testnutzer, "App veröffentlichen" (sonst läuft die Verbindung nach 7 Tagen ab).
+4. Bereiche: die drei Leserechte einfügen (Kopier-Knopf im Blatt).
+5. OAuth-Client "Webanwendung" mit der Weiterleitungs-URI `https://dashboard.hahntim518.workers.dev/api/fitbit/callback` (Kopier-Knopf).
+6. Client-ID und Client-Secret im Blatt einfügen, "Speichern". Sie liegen verschlüsselt in der Datenbank und werden nie wieder angezeigt (nur die letzten 4 Zeichen der ID). Löschen ist im Blatt möglich. Worker-Secrets (`GOOGLE_HEALTH_CLIENT_ID`, `GOOGLE_HEALTH_CLIENT_SECRET`) gelten weiter als Rückfall.
+7. "Fitbit verbinden", Konto wählen, bei "Google hat diese App nicht überprüft" auf "Erweitert" und "Weiter zu Dashboard", alle drei Rechte angehakt lassen.
 
-1. Öffne https://console.cloud.google.com und melde dich an. Oben auf die Projektauswahl, "Neues Projekt", Name "Dashboard", "Erstellen".
-2. Links "APIs und Dienste", "Bibliothek". Suche "Google Health API", öffnen, "Aktivieren".
-3. Links "Google Auth Platform" (oder "OAuth-Zustimmungsbildschirm"), "Los geht's". App-Name "Dashboard", Support-E-Mail deine Adresse. Zielgruppe "Extern". Kontakt-E-Mail deine Adresse. Speichern.
-4. "Datenzugriff", "Bereiche hinzufügen". Füge diese drei ein und speichere:
-   - `https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly`
-   - `https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly`
-   - `https://www.googleapis.com/auth/googlehealth.sleep.readonly`
-5. "Zielgruppe": unter "Testnutzer" deine Google-Adresse eintragen, speichern. Dann "App veröffentlichen" (Status "In Produktion"). Ohne diesen Schritt läuft der Zugang nach 7 Tagen ab und du müsstest jede Woche neu verbinden. Google zeigt dabei eine Warnung zur Überprüfung, die du für den Eigengebrauch wegklickst (nicht zur Verifizierung einreichen).
-6. "Clients", "Client erstellen", Typ "Webanwendung", Name "Dashboard". Bei "Autorisierte Weiterleitungs-URIs" genau diese Adresse eintragen:
-   `https://dashboard.hahntim518.workers.dev/api/fitbit/callback`
-   (Die App zeigt dieselbe Adresse im Status als `redirectUri`. Sie muss Zeichen für Zeichen stimmen.) "Erstellen". Es erscheinen Client-ID und Client-Secret. Kopiere beide.
-7. Gib die drei Werte NICHT im Chat weiter. Sie gehören als Worker-Secrets auf den Server. Auf deinem Computer im Projektordner (oder lass es mich mit dem sicheren Eingabeformular tun):
-   - `npx wrangler secret put GOOGLE_HEALTH_CLIENT_ID` und die Client-ID einfügen
-   - `npx wrangler secret put GOOGLE_HEALTH_CLIENT_SECRET` und das Secret einfügen
-   - `npx wrangler secret put HEALTH_TOKEN_KEY` und eine lange Zufallszeichenfolge einfügen (mindestens 32 Zeichen, z.B. Ausgabe von `openssl rand -base64 48`). Diesen Wert nicht verlieren und nicht ändern: sonst sind gespeicherte Tokens unlesbar und du verbindest neu.
-8. Die Datenbank-Änderung anwenden (falls noch nicht geschehen): `npm run db:migrate:remote` (legt die drei Tabellen an) und die App deployen.
-9. In der App: Einstellungen, Abschnitt "Fitbit", "Fitbit verbinden". Google öffnet sich. Konto wählen, bei "Google hat diese App nicht überprüft" auf "Erweitert" und "Weiter zu Dashboard", dann alle drei Rechte angehakt lassen, "Weiter". Du landest wieder in den Einstellungen mit der Meldung "Verbunden". Die letzten 30 Tage laden im Hintergrund, nach einem Moment stehen Werte im Körper-Tab.
-10. Danach läuft es von selbst, jeden Morgen nach 08:00. "Jetzt abgleichen" holt es sofort. "Trennen" widerruft den Zugriff bei Google und löscht die Tokens (die Messwerte bleiben).
+Falls Google wegen des Alters kein Projekt zulässt: Ein Elternteil macht die Schritte 1 bis 5 im eigenen Google-Konto und trägt deine E-Mail als Testnutzer ein.
 
-Wenn es nicht klappt: Der Abschnitt "Fitbit" zeigt die Meldung. Häufig: "Neu verbinden" (Zugang abgelaufen oder widerrufen: einfach nochmals verbinden), "Keine Berechtigung" (ein Recht beim Verbinden abgewählt, oder die Google Health API in Schritt 2 nicht aktiviert), "redirect_uri_mismatch" bei Google (Adresse in Schritt 6 stimmt nicht).
+Danach läuft es von selbst, jeden Morgen nach 08:00. Die Knopfnamen stammen aus der Google-Doku (developers.google.com/health/setup) und stehen deutsch mit dem englischen Namen in Klammern, weil die deutsche Console nicht geprüft werden konnte.
+
+Wenn es nicht klappt: Der Abschnitt "Fitbit" in den Einstellungen zeigt die Meldung. Häufig: "Neu verbinden" (Zugang abgelaufen: nochmals verbinden), "Keine Berechtigung" (ein Recht abgewählt oder API nicht aktiviert), "redirect_uri_mismatch" bei Google (Adresse in Schritt 5 stimmt nicht).
 
 ## 4. Was geprüft ist und was nicht
 

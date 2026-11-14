@@ -9,6 +9,7 @@ import { navigate } from "./router";
 import { CheckMark, ConfirmDelete, DayToggles, Icon, Segments, Spark, nf } from "./ui";
 import { SwipeRow } from "./swipe";
 import { useDay } from "./day";
+import { FitbitHinweis } from "./fitbit-setup";
 import type { Suggestion } from "../shared/vorschlag";
 import { subjectAverages } from "./lib";
 import {
@@ -280,6 +281,7 @@ export function TrainingSheet({ day }: { day: string }) {
     <div>
       <h3>{title}</h3>
       {when && <div className="when">{when}</div>}
+      <FitbitHinweis day={day} />
       {!s && !plan && (
         <div className="empty">
           <span>Kein Plan für diesen Tag.</span>
