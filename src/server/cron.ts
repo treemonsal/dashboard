@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/d1";
 import * as schema from "./db/schema";
 import { syncCalendars } from "./calendar";
 import { sendDueReminders } from "./push";
+import { runHealthIfDue } from "./health/sync";
 import type { Bindings } from "./util";
 
 export const CALENDAR_EVERY_MIN = 25;
@@ -21,5 +22,10 @@ export async function runScheduled(env: Bindings, now: Date = new Date()): Promi
     if (!last || now.getTime() - Date.parse(last.at) >= CALENDAR_EVERY_MIN * 60_000) await syncCalendars(env, { now });
   } catch (e) {
     console.error("Kalender-Abgleich fehlgeschlagen:", (e as Error)?.message ?? "unbekannt");
+  }
+  try {
+    await runHealthIfDue(env, now);
+  } catch (e) {
+    console.error("Gesundheits-Abgleich fehlgeschlagen:", (e as Error)?.name ?? "unbekannt");
   }
 }

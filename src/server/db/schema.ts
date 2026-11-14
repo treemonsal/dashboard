@@ -368,3 +368,42 @@ export const sentReminders = sqliteTable("sent_reminders", {
   key: text("key").primaryKey(),
   sentAt: text("sent_at").notNull().default(now),
 });
+
+/* ---------- Gesundheit: Verbindung zu Google Health (src/server/health) ---------- */
+// Eine Zeile (id = Anbieter). Tokens liegen nur verschlüsselt (AES-GCM, Schlüssel = Secret HEALTH_TOKEN_KEY).
+export const healthConnection = sqliteTable("health_connection", {
+  id: text("id").primaryKey(),
+  refreshEnc: text("refresh_enc").notNull(),
+  accessEnc: text("access_enc"),
+  accessExpiresAt: text("access_expires_at"),
+  scope: text("scope"),
+  connectedAt: text("connected_at").notNull().default(now),
+  lastError: text("last_error"),
+  updatedAt: text("updated_at").notNull().default(now),
+});
+
+// Laufende Anmeldungen (state + PKCE-Verifier), höchstens 10 Minuten gültig, einmal verwendbar.
+export const healthOauthState = sqliteTable("health_oauth_state", {
+  state: text("state").primaryKey(),
+  verifier: text("verifier").notNull(),
+  createdAt: text("created_at").notNull().default(now),
+});
+
+// Trainings aus Google Health; day = Tag des Trainingsbeginns in Europe/Zurich.
+export const healthWorkouts = sqliteTable(
+  "health_workouts",
+  {
+    id: text("id").primaryKey(), // Hash aus Anbieter und Startzeit
+    day: text("day").notNull(),
+    startAt: text("start_at").notNull(),
+    endAt: text("end_at"),
+    type: text("type").notNull(),
+    name: text("name"),
+    minutes: integer("minutes"),
+    kcal: integer("kcal"),
+    avgHr: integer("avg_hr"),
+    source: text("source").notNull().default("fitbit"),
+    ...timestamps,
+  },
+  (t) => [index("health_workouts_day_idx").on(t.day)],
+);

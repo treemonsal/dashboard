@@ -1,17 +1,33 @@
 import { useState, type FormEvent } from "react";
-import { dayMonthLong, daysUntil, numberWord, weekdayLong, dayCompact, minutesOf } from "../shared/dates";
+import { dayMonthLong, daysUntil, numberWord, weekdayLong, dayCompact, minutesOf, timeInZone } from "../shared/dates";
 import { parseQuick } from "../shared/parse";
 import { describeRule } from "../shared/recurrence";
 import { Link } from "./router";
 import { useSheet } from "./sheet";
-import { Check, ExamSheet, TagSheet, TaskLine, TrainingSheet } from "./sheets";
+import { ExamSheet, TagSheet, TaskLine, TrainingSheet } from "./sheets";
 import { GeldSheet, HealthSheet } from "./sheets2";
-import { CheckMark, Icon, Money, Ring, Meter, Empty, nf, hm } from "./ui";
+import { CheckMark, Icon, Money, Ring, Meter, PageTitle, nf, hm } from "./ui";
 import { useDay } from "./day";
 import { ExamsCard, GymCard, NotenCard, YearCard } from "./cards";
 import { inbox, upcoming as upcomingTasks, tasksToday, useLatest, useMonthMoney } from "./lib";
 import { dayItems } from "./kalender";
-import { useCreateProject, useCreateTask, useEvents, useExams, useHealth, useProjects, useSettings, useTasks, useToday } from "./queries";
+import { useCreateProject, useCreateTask, useEvents, useExams, useHealth, useNow, useProjects, useSettings, useTasks, useToday } from "./queries";
+
+/** Verbleibende wache Zeit bis zur Schlafenszeit als schmaler Balken. */
+function RestBar() {
+  const now = useNow();
+  const s = useSettings();
+  const a = minutesOf(s.wakeTime), b = minutesOf(s.sleepTime);
+  const nowMin = minutesOf(timeInZone(now));
+  if (!(b > a) || nowMin >= b) return null;
+  const left = b - Math.max(nowMin, a);
+  return (
+    <div className="rest" role="img" aria-label={`Noch ${hm(left)} wach`}>
+      <Meter pct={(left / (b - a)) * 100} />
+      <span>{hm(left)}</span>
+    </div>
+  );
+}
 
 export function Heute() {
   const d = useDay();
@@ -27,7 +43,7 @@ export function Heute() {
   const timed = d.list.filter((t) => t.dueTime);
   const untimed = d.list.filter((t) => !t.dueTime);
   const nextTask = [...timed, ...untimed].find((t) => !t.doneAt);
-  const nextText = nextTask ? `Als Nächstes: ${nextTask.title}${nextTask.dueTime ? ` um ${nextTask.dueTime}` : ""}` : d.training && !d.training.done ? "Als Nächstes: Gym" : "";
+  const nextText = nextTask ? `${nextTask.title}${nextTask.dueTime ? ` · ${nextTask.dueTime}` : ""}` : d.training && !d.training.done ? "Gym" : "";
   const title = d.total === 0 ? "Nichts geplant" : remaining === 0 ? "Alles erledigt" : remaining === 1 ? "Noch ein Ding" : `Noch ${numberWord(remaining)} Dinge`;
   const next = exams[0];
   const mx = Math.max(1, ...h7.rows.map((r) => r.sleepMin ?? 0));
@@ -61,8 +77,10 @@ export function Heute() {
             {nextText && <p>{nextText}</p>}
           </span>
         </button>
-        {d.total === 0 && !d.loading && <Link href="/aufgaben" className="chip btn press" style={{ marginLeft: 4 }}>Aufgabe hinzufügen</Link>}
+        {d.total === 0 && !d.loading && <Link href="/aufgaben" className="chip btn press">Aufgabe hinzufügen</Link>}
       </div>
+
+      <RestBar />
 
       <YearCard />
 
@@ -125,7 +143,6 @@ export function Heute() {
 
       <GymCard />
       <ExamsCard />
-      <span hidden>{dayCompact(d.today)}{minutesOf("00:00")}{hm(0)}</span>
     </div>
   );
 }
@@ -172,11 +189,11 @@ export function Aufgaben() {
 
   return (
     <div className="view">
-      <div className="top"><span className="d" style={{ fontSize: 28, fontWeight: 700, color: "var(--fg)", letterSpacing: "-.03em" }}>Aufgaben</span></div>
+      <PageTitle>Aufgaben</PageTitle>
       <div className="seg full" role="group" aria-label="Ansicht">
         {([["eingang", "Eingang", lists.eingang.length], ["heute", "Heute", lists.heute.filter((t) => !t.doneAt).length], ["demnaechst", "Demnächst", lists.demnaechst.length], ["projekte", "Projekte", 0]] as [Seg, string, number][]).map(([k, l, n]) => (
-          <button key={k} type="button" className="press" aria-pressed={seg === k} onClick={() => setSeg(k)} style={{ padding: "0 4px" }}>
-            {l}{n > 0 && <span className="faint" style={{ marginLeft: 4, fontSize: 12 }}>{n}</span>}
+          <button key={k} type="button" className="press" aria-pressed={seg === k} onClick={() => setSeg(k)} >
+            {l}{n > 0 && <span className="faint">{n}</span>}
           </button>
         ))}
       </div>
@@ -220,7 +237,7 @@ export function Aufgaben() {
           <button type="submit" className="press" disabled={!parsed?.title} aria-label="Hinzufügen"><Icon n="up" /></button>
         </form>
       </div>
-      <span hidden><Check done={false} onToggle={() => {}} label="" /><Empty>{""}</Empty></span>
+      <div className="qe-space" />
     </div>
   );
 }
@@ -228,7 +245,7 @@ export function Aufgaben() {
 export function Ziele() {
   return (
     <div className="view">
-      <div className="top"><span className="d" style={{ fontSize: 28, fontWeight: 700, color: "var(--fg)", letterSpacing: "-.03em" }}>Ziele</span></div>
+      <PageTitle>Ziele</PageTitle>
       <GymCard />
       <NotenCard />
       <ExamsCard limit={6} />

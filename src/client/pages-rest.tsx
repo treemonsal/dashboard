@@ -1,21 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { ErinnerungenEinstellungen, KalenderEinstellungen } from "./einstellungen-kalender";
-import { addDays, dayCompact, daysBetween, daysUntil, mondayOf, minutesOf, clockOf, timeInZone, monthLong, WEEKDAY_LETTERS, WEEK_ORDER, weekdayNum } from "../shared/dates";
+import { addDays, dayCompact, daysBetween, daysUntil, mondayOf, minutesOf, timeInZone, monthLong, WEEKDAY_LETTERS, WEEK_ORDER, weekdayNum } from "../shared/dates";
 import { byCategory, ownShare } from "../shared/geld";
 import { api } from "./api";
-import { Link, navigate } from "./router";
+import { Link } from "./router";
 import { useSheet } from "./sheet";
 import { ExamSheet, PlanSheet } from "./sheets";
 import { HealthSheet } from "./sheets2";
 import { DepotSheet, CatIcon, MamaSheet, SpendChart, TxRow, monthTitle, useDepot, useMama } from "./geld";
-import { DayToggles, DetailHead, Empty, Icon, Money, RoundAction, nf, hm, Glow } from "./ui";
+import { DayToggles, DetailHead, Empty, Icon, Money, RoundAction, PageTitle, nf, hm } from "./ui";
 import { GymCard } from "./cards";
 import { useMonthMoney, useLatest } from "./lib";
 import { useAccounts, useAllTransactions, useCategories, useExams, useGymPlans, useNow, useSetSetting, useSettings, useTasks, useToday, useTransactions } from "./queries";
 import { notify } from "./toast";
 import { UploadAction } from "./import";
 
-const TOP = (t: string) => <div className="top"><span className="d" style={{ fontSize: 28, fontWeight: 700, color: "var(--fg)", letterSpacing: "-.03em" }}>{t}</span></div>;
 const dayList = (s: string) => (s ? s.split(",").map(Number) : []);
 
 /* ---------- Geld ---------- */
@@ -37,10 +36,9 @@ export function Geld() {
   const hasAny = all.length > 0;
   return (
     <div className="view">
-      <Glow color="rgba(77,163,255,.10)" />
-      {TOP("Geld")}
+      <PageTitle>Geld</PageTitle>
       <div className="center">
-        <div style={{ fontSize: 13, color: "var(--fg2)" }}>Übrig</div>
+        <div className="lbl">Übrig</div>
         {hasAny ? <Money v={m.budget - spent} size={52} /> : <span className="bigv faint" style={{ fontSize: 52 }}>–</span>}
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <button type="button" className="iconbtn press" aria-label="Voriger Monat" onClick={() => shift(-1)}><Icon n="back" /></button>
@@ -182,8 +180,7 @@ export function Koerper() {
   );
   return (
     <div className="view">
-      <Glow color="rgba(255,69,58,.07)" />
-      {TOP("Körper")}
+      <PageTitle>Körper</PageTitle>
       {!connected && <div className="card"><div className="empty">Noch nicht mit Fitbit verbunden.</div></div>}
       <div className="grid2">
         <Stat k="Schlaf" metric="sleep" v={sleep.latest?.sleepMin != null ? hm(sleep.latest.sleepMin) : null} />
@@ -350,7 +347,6 @@ export function Zeit() {
           </div>
         )}
       </div>
-      <span hidden>{clockOf(0)}</span>
     </div>
   );
 }
@@ -403,7 +399,6 @@ export function Einstellungen() {
         <Link href="/plaene" className="row press" style={{ borderTop: 0 }}><div className="l"><b>Trainingspläne</b></div><Icon n="chev" className="" /></Link>
         <button type="button" className="row press" style={{ borderTop: "1px solid var(--line)" }} onClick={exportAll}><div className="l"><b>Daten exportieren</b></div><span className="r">JSON</span></button>
       </div>
-      <span hidden>{navigate.name}{nf(0)}{Math.floor(0)}</span>
     </div>
   );
 }

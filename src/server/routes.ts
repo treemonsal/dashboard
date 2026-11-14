@@ -33,6 +33,7 @@ import { todayInZone, weekdayNum } from "../shared/dates";
 import { commitImport, learnFromCorrection, previewImport, recompute } from "./bankimport";
 import { registerCalendar } from "./calendar";
 import { registerPush } from "./push";
+import { registerHealth } from "./health/routes";
 import { batch, idParam, newId, nowIso, notFound, v, type AppEnv, type Db } from "./util";
 
 const t = schema;
@@ -93,6 +94,7 @@ async function mealDefault(db: Db, categoryId: string | null | undefined, explic
 export function registerExtra(api: Hono<AppEnv>) {
   registerCalendar(api);
   registerPush(api);
+  registerHealth(api);
 
   /* ---------- Einstellungen ---------- */
   api.get("/settings", async (c) => {

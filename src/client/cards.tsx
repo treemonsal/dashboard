@@ -5,7 +5,7 @@ import { useSheet } from "./sheet";
 import { ExamSheet, SubjectSheet, TrainingSheet } from "./sheets";
 import { Icon, nf } from "./ui";
 import { gesamt, subjectAverages } from "./lib";
-import { useExams, useGrades, useGymDays, useSettings, useSubjects, useToday } from "./queries";
+import { useExams, useGrades, useGymDays, useGymPlans, useSettings, useSubjects, useToday } from "./queries";
 
 export function YearCard() {
   const today = useToday();
@@ -34,6 +34,7 @@ export function GymCard() {
   const sheet = useSheet();
   const goal = Number(useSettings().gymGoal);
   const { from, done } = useGymDays(16);
+  const planned = new Set(useGymPlans().data?.flatMap((p) => p.weekdays) ?? []);
   const monday = mondayOf(today);
   const week = Array.from({ length: 7 }, (_, r) => addDays(monday, r));
   const n = week.filter((d) => done.has(d)).length;
@@ -42,11 +43,11 @@ export function GymCard() {
   return (
     <div className="card">
       <h2>
-        <span style={{ color: "var(--fg2)", fontWeight: 600 }}>Gym</span>
+        <span>Gym</span>
         <span>
           <span className="wk" aria-hidden="true">
             {week.map((d, r) => (
-              <i key={d} className={`${done.has(d) ? "g" : ""} ${r === 6 ? "s" : ""} ${d === today ? "t" : ""}`} />
+              <i key={d} className={`${done.has(d) ? "g" : ""} ${r === 6 ? "s" : ""} ${d === today ? "t" : ""} ${d < today && planned.has(weekdayNum(d)) ? "m" : ""}`} />
             ))}
           </span>
           {n} von {goal}
@@ -57,7 +58,7 @@ export function GymCard() {
           d > today ? (
             <i key={d} className="f" />
           ) : (
-            <button key={d} type="button" className={`press ${done.has(d) ? "g" : ""} ${d === today ? "t" : ""} ${r === 6 ? "s" : ""}`} aria-label={`${dayCompact(d)}${done.has(d) ? ", Training" : ""}`} onClick={() => sheet.open(<TrainingSheet day={d} />)} />
+            <button key={d} type="button" className={`press ${done.has(d) ? "g" : ""} ${d === today ? "t" : ""} ${r === 6 ? "s" : ""} ${d < today && planned.has(weekdayNum(d)) ? "m" : ""}`} aria-label={`${dayCompact(d)}${done.has(d) ? ", Training" : planned.has(weekdayNum(d)) && d < today ? ", verpasst" : ""}`} onClick={() => sheet.open(<TrainingSheet day={d} />)} />
           ),
         )}
       </div>
@@ -103,7 +104,7 @@ export function NotenCard() {
   return (
     <div className="card">
       <h2>
-        Noten <span>Ziel 4.5, kein Fach unter 4</span>
+        Noten
       </h2>
       <div className="yh">
         <b>{avg === null ? "–" : nf(avg, 1)}</b>

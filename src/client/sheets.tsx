@@ -54,7 +54,7 @@ export function TaskLine({ task, today, showTime = false }: { task: Task; today:
   const m = taskMeta(task, today);
   return (
     <SwipeRow disabled={done} onComplete={() => toggle.mutate(task.id, true)} onTap={() => sheet.open(<TaskSheet id={task.id} />)}>
-      <div className={`slot press ${done ? "done" : ""}`} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && sheet.open(<TaskSheet id={task.id} />)} style={showTime ? undefined : { gridTemplateColumns: "minmax(0,1fr) 44px" }}>
+      <div className={`slot press ${showTime ? "" : "nl"} ${done ? "done" : ""}`} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && sheet.open(<TaskSheet id={task.id} />)} style={showTime ? undefined : { gridTemplateColumns: "minmax(0,1fr) var(--hit)" }}>
         {showTime && <span className="t">{task.dueTime ?? ""}</span>}
         {showTime && <span className="dot" style={{ background: done ? "var(--fg3)" : "var(--fg)" }} />}
         <span className="w">

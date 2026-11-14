@@ -3,7 +3,7 @@ import { Fragment, useState, type ReactNode } from "react";
 import { addDays, clockOf, dayCompact, minutesOf, mondayOf, weekdayNum } from "../shared/dates";
 import { eventsOnDay, lastDayOf, type DayEvent } from "../shared/agenda";
 import type { CalendarEvent, Exam, Task } from "../shared/schemas";
-import { DetailHead, Icon } from "./ui";
+import { CheckMark, DetailHead, Icon } from "./ui";
 import { useSheet } from "./sheet";
 import { ExamSheet, TaskLine, TrainingSheet } from "./sheets";
 import { useEvents, useExams, useGymDays, useGymPlans, useTasks, useToday } from "./queries";
@@ -151,18 +151,17 @@ export function Woche() {
         const trainingDone = gym.done.has(day);
         const dayExams = exams.filter((x) => x.date === day);
         const items = dayItems({ day, tasks: dayTasks, events: ev.events, exams: dayExams });
+        const missed = !!plan && !trainingDone && day < today;
         const training = (plan || trainingDone) && (
-          <button type="button" className={`slot press ${trainingDone ? "done" : ""}`} onClick={() => sheet.open(<TrainingSheet day={day} />)}>
+          <button type="button" className={`slot press ${trainingDone ? "done" : ""} ${missed ? "missed" : ""}`} onClick={() => sheet.open(<TrainingSheet day={day} />)}>
             <span className="t" />
-            <span className="dot" style={{ background: trainingDone ? "var(--fg3)" : "var(--fg)" }} />
+            <span className="dot" style={missed ? undefined : { background: trainingDone ? "var(--fg3)" : "var(--fg)" }} />
             <span className="w">
               <b>Gym</b>
               {plan && <span>{plan.name}</span>}
             </span>
             <span className="chkhit">
-              <span className="chk">
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M2.5 6.8 5.3 9.5 10.5 3.8" stroke="#000" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              </span>
+              <span className="chk"><CheckMark /></span>
             </span>
           </button>
         );

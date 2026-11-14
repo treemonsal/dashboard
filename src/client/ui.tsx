@@ -2,6 +2,9 @@
 import { useState, type ReactNode } from "react";
 import { Link, navigate } from "./router";
 
+/** Schmaler Abstand für Tausender (U+202F). */
+const THIN = "\u202f";
+
 const P: Record<string, string> = {
   heute: "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17ZM12 7.5V12l3 2",
   aufgaben: "M5 7h14M5 12h14M5 17h9",
@@ -41,14 +44,16 @@ export const CheckMark = () => (
 );
 
 /** Betrag: Franken gross, Rappen halb so gross daneben, "CHF" klein davor. */
+const MONEY_SIZE: Record<number, string> = { 15: "var(--t-md)", 16: "var(--t-body)", 17: "var(--t-lg)", 26: "var(--t-stat)", 30: "var(--t-ring)", 34: "var(--t-hero)", 38: "var(--t-big)", 44: "var(--t-xl)", 52: "var(--t-xxl)" };
+
 export function Money({ v, size = 38, cur = true, signed = false, className = "" }: { v: number; size?: number; cur?: boolean; signed?: boolean; className?: string }) {
   const neg = v < 0;
   const abs = Math.abs(Math.round(v * 100) / 100);
   const whole = Math.floor(abs);
   const cents = Math.round((abs - whole) * 100);
-  const f = whole.toLocaleString("de-CH").replace(/[’']/g, " ");
+  const f = whole.toLocaleString("de-CH").replace(/[’']/g, THIN);
   return (
-    <span className={`money-n ${className}`} style={{ fontSize: size }}>
+    <span className={`money-n ${className}`} style={{ fontSize: MONEY_SIZE[size] ?? "var(--t-big)" }}>
       {cur && <span className="cur">CHF</span>}
       {neg ? "−" : signed && v > 0 ? "+" : ""}
       {f}
@@ -103,7 +108,7 @@ export function Segments<T extends string | number>({ value, options, onChange, 
       {options.map((o) => (
         <button key={String(o.v)} type="button" className="press" aria-pressed={o.v === value} onClick={() => onChange(o.v)}>
           {o.label}
-          {o.n ? <span className="faint" style={{ marginLeft: 5, fontSize: 12 }}>{o.n}</span> : null}
+          {o.n ? <span className="faint">{o.n}</span> : null}
         </button>
       ))}
     </div>
@@ -195,10 +200,11 @@ export function RoundAction({ icon, label, onClick, href }: { icon: string; labe
   );
 }
 
-export function Glow({ color }: { color: string }) {
-  return <div className="glow" style={{ background: `radial-gradient(120% 100% at 50% 0%, ${color}, transparent 70%)` }} />;
-}
+/** Seitentitel der Hauptseiten. */
+export const PageTitle = ({ children }: { children: ReactNode }) => (
+  <div className="top"><h1 className="pt">{children}</h1></div>
+);
 
 export const go = navigate;
-export const nf = (n: number, d = 0) => n.toLocaleString("de-CH", { minimumFractionDigits: d, maximumFractionDigits: d }).replace(/[’']/g, " ");
+export const nf = (n: number, d = 0) => n.toLocaleString("de-CH", { minimumFractionDigits: d, maximumFractionDigits: d }).replace(/[’']/g, THIN);
 export const hm = (min: number) => `${Math.floor(min / 60)}h ${String(Math.round(min % 60)).padStart(2, "0")}m`;

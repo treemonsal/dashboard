@@ -42,4 +42,20 @@
   --t-body: 16px;
   --t-sm: 14px;
   --t-xs: 13px;
+  --t-2xs: 12px;
+  --t-md: 15px;
+  --t-lg: 17px;
+  --t-stat: 26px;
+  --t-sec: 22px;
+  --t-tab: 11px;
+  --t-tiny: 10px;
+  --t-ring: 30px;
+  --t-xl: 44px;
+  --t-xxl: 52px;
+
+  /* Weitere Masse */
+  --r-bar: 4px;
+  --r-cell: 5px;
+  --hit: 44px;
+  --end-space: 110px;
 }
