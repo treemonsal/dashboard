@@ -9,7 +9,7 @@ import { join } from "node:path";
 const target = process.argv.includes("--remote") ? "--remote" : "--local";
 
 // Fächer laut Kalender (Plan, Nachtrag 13.11.)
-const subjects = ["E", "T+U", "HKB e", "W+R", "FRW", "M"];
+const subjects = ["E", "T+U", "HKB e", "W+R", "FRW", "M", "D", "F", "Sport"];
 const subjectId = (code) => "s-" + code.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "");
 
 // Alle Zeiten lokal in Europe/Zurich.
