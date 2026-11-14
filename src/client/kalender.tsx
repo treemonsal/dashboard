@@ -42,7 +42,7 @@ export function dayItems(o: { day: string; tasks: Task[]; events: CalendarEvent[
   }
   for (const t of o.tasks) {
     const overdue = !!t.dueDate && t.dueDate < o.day;
-    items.push({ key: `t:${t.id}`, at: overdue ? -1 : t.dueTime ? minutesOf(t.dueTime) : 9999, el: <TaskLine task={t} today={o.taskToday ?? o.day} showTime suggest={o.suggest?.get(t.id)} /> });
+    items.push({ key: `t:${t.id}`, at: overdue ? -1 : t.dueTime ? minutesOf(t.dueTime) : o.suggest?.get(t.id) ? minutesOf(o.suggest.get(t.id)!.time) : 9999, el: <TaskLine task={t} today={o.taskToday ?? o.day} showTime suggest={o.suggest?.get(t.id)} /> });
   }
   for (const x of o.exams ?? []) {
     items.push({ key: `x:${x.id}`, at: x.startTime ? minutesOf(x.startTime) : -1, el: <ExamRow exam={x} /> });

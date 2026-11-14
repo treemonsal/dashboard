@@ -37,6 +37,8 @@ export function GymCard() {
   const planned = new Set(useGymPlans().data?.flatMap((p) => p.weekdays) ?? []);
   const monday = mondayOf(today);
   const week = Array.from({ length: 7 }, (_, r) => addDays(monday, r));
+  // Verpasst zählt erst ab dem ersten eingetragenen Training, nicht für die Zeit vor der App.
+  const since = [...done].sort()[0] ?? today;
   const n = week.filter((d) => done.has(d)).length;
   const cells: { d: string; r: number }[] = [];
   for (let w = 0; w < 16; w++) for (let r = 0; r < 7; r++) cells.push({ d: addDays(from, w * 7 + r), r });
@@ -47,7 +49,7 @@ export function GymCard() {
         <span>
           <span className="wk" aria-hidden="true">
             {week.map((d, r) => (
-              <i key={d} className={`${done.has(d) ? "g" : ""} ${r === 6 ? "s" : ""} ${d === today ? "t" : ""} ${d < today && planned.has(weekdayNum(d)) ? "m" : ""}`} />
+              <i key={d} className={`${done.has(d) ? "g" : ""} ${r === 6 ? "s" : ""} ${d === today ? "t" : ""} ${d < today && d >= since && planned.has(weekdayNum(d)) ? "m" : ""}`} />
             ))}
           </span>
           {n} von {goal}
@@ -58,7 +60,7 @@ export function GymCard() {
           d > today ? (
             <i key={d} className="f" />
           ) : (
-            <button key={d} type="button" className={`press ${done.has(d) ? "g" : ""} ${d === today ? "t" : ""} ${r === 6 ? "s" : ""} ${d < today && planned.has(weekdayNum(d)) ? "m" : ""}`} aria-label={`${dayCompact(d)}${done.has(d) ? ", Training" : planned.has(weekdayNum(d)) && d < today ? ", verpasst" : ""}`} onClick={() => sheet.open(<TrainingSheet day={d} />)} />
+            <button key={d} type="button" className={`press ${done.has(d) ? "g" : ""} ${d === today ? "t" : ""} ${r === 6 ? "s" : ""} ${d < today && d >= since && planned.has(weekdayNum(d)) ? "m" : ""}`} aria-label={`${dayCompact(d)}${done.has(d) ? ", Training" : planned.has(weekdayNum(d)) && d < today && d >= since ? ", verpasst" : ""}`} onClick={() => sheet.open(<TrainingSheet day={d} />)} />
           ),
         )}
       </div>

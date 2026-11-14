@@ -105,7 +105,7 @@ export function FitbitEinstellungen() {
   return (
     <div className="card" style={{ paddingTop: 0 }}>
       <h2>Fitbit</h2>
-      {!s.connected && !s.configured && <div className="faint" style={{ paddingBottom: 12, fontSize: 15 }}>Noch nicht eingerichtet. Client-ID und Secret fehlen auf dem Server.</div>}
+      {!s.connected && !s.configured && <div className="faint" style={{ paddingBottom: 12, fontSize: 15 }}>Noch nicht eingerichtet.</div>}
       {!s.connected && s.configured && (
         <button type="button" className="row press" style={{ borderTop: 0 }} disabled={busy} onClick={start}>
           <div className="l"><b>Fitbit verbinden</b></div>
