@@ -271,20 +271,15 @@
   .qe-space { height: 76px; flex: none; }
   .qe { position: fixed; left: 0; right: 0; margin: 0 auto; width: min(var(--col), 100%); bottom: calc(max(14px, calc(env(safe-area-inset-bottom, 0px) - 14px)) + 70px); padding: 0 max(12px, env(safe-area-inset-left, 0px)); z-index: 4; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
   .qe > * { pointer-events: auto; }
-  .qe .qe-open { display: block; width: 100%; height: 56px; border-radius: 99px; padding: 0 22px; text-align: left; color: var(--fg2); font-size: var(--t-body); background: rgba(44, 44, 48, 0.9); -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%); border: 1px solid var(--line); }
-  /* Eingabe oben im Bild, darunter abgedunkelt */
-  .cmp { position: fixed; inset: 0; z-index: 12; background: rgba(0, 0, 0, 0.78); opacity: 0; pointer-events: none; transition: opacity 0.2s var(--ease); }
-  .cmp.on { opacity: 1; pointer-events: auto; }
-  .cmp-box { position: absolute; left: 0; right: 0; margin: 0 auto; width: min(var(--col), 100%); top: calc(env(safe-area-inset-top, 0px) + 56px); padding: 0 12px; display: flex; flex-direction: column; gap: 10px; transform: translateY(-8px); transition: transform 0.3s var(--ease); }
-  .cmp.on .cmp-box { transform: none; }
-  .cmp form { display: flex; gap: 8px; align-items: center; background: var(--card2); border: 1px solid var(--line); border-radius: 99px; padding: 6px 6px 6px 20px; }
-  .cmp input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; height: 48px; font-size: var(--t-lg); }
-  .cmp input::placeholder { color: var(--fg3); }
-  .cmp button { width: 48px; height: 48px; border-radius: 99px; background: var(--fg); color: #000; display: grid; place-items: center; flex: none; }
-  .cmp button[disabled] { opacity: 0.25; }
-  .cmp svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-  .cmp .chips { display: flex; gap: 6px; padding-left: 14px; flex-wrap: wrap; }
-  .cmp .chips span { background: var(--card2); color: var(--fg); font-size: var(--t-xs); font-weight: 600; padding: 5px 10px; border-radius: 99px; }
+  .qtop { position: sticky; top: 6px; z-index: 3; display: flex; flex-direction: column; gap: 8px; }
+  .qtop form { display: flex; gap: 8px; align-items: center; background: var(--card2); border: 1px solid var(--line); border-radius: 99px; padding: 5px 5px 5px 20px; }
+  .qtop input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; height: 46px; font-size: var(--t-lg); }
+  .qtop input::placeholder { color: var(--fg3); }
+  .qtop button { width: 46px; height: 46px; border-radius: 99px; background: var(--fg); color: #000; display: grid; place-items: center; flex: none; transition: opacity 0.2s; }
+  .qtop button[disabled] { opacity: 0.2; }
+  .qtop svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .qtop .chips { display: flex; gap: 6px; padding-left: 14px; flex-wrap: wrap; }
+  .qtop .chips span { background: var(--card2); color: var(--fg); font-size: var(--t-xs); font-weight: 600; padding: 5px 10px; border-radius: 99px; }
   .qe .chips { display: flex; gap: 6px; padding-left: 14px; flex-wrap: wrap; }
   .qe .chips span { background: var(--card2); color: var(--fg); font-size: var(--t-xs); font-weight: 600; padding: 5px 10px; border-radius: 99px; }
   .qe form { display: flex; gap: 8px; align-items: center; background: rgba(32, 32, 36, 0.82); -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%); border: 1px solid var(--line); border-radius: 99px; padding: 5px 5px 5px 18px; }

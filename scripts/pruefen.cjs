@@ -24,7 +24,7 @@ const post = (p, url, body, method = "POST") => p.evaluate(async ([u, b, m]) => 
   const sheetY = () => p.evaluate(() => { const s = document.querySelector(".sheet"); return s ? new DOMMatrix(getComputedStyle(s).transform).m42 : null; });
   const closeSheet = async () => { await p.keyboard.press("Escape"); await wait(600); };
   const tapTargets = async (n) => {
-    const small = await p.evaluate(() => [...document.querySelectorAll("button, a, input, select")].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (r.height < 43.5 || r.width < 43.5) && !e.closest(".gym") && !e.closest(".qe input"); }).map((e) => (e.getAttribute("aria-label") || e.textContent || e.className).slice(0, 24) + ` ${Math.round(e.getBoundingClientRect().width)}x${Math.round(e.getBoundingClientRect().height)}`));
+    const small = await p.evaluate(() => [...document.querySelectorAll("button, a, input, select")].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (r.height < 43.5 || r.width < 43.5) && !e.closest(".gym") && !e.closest(".qtop input"); }).map((e) => (e.getAttribute("aria-label") || e.textContent || e.className).slice(0, 24) + ` ${Math.round(e.getBoundingClientRect().width)}x${Math.round(e.getBoundingClientRect().height)}`));
     ok(small.length === 0, `Tippziele >= 44px: ${n} ${small.slice(0, 4).join(" | ")}`);
   };
 
@@ -35,9 +35,9 @@ const post = (p, url, body, method = "POST") => p.evaluate(async ([u, b, m]) => 
 
   /* ---- Aufgaben: Schnelleingabe ---- */
   await go("/aufgaben");
-  const input = p.locator(".qe input");
+  const input = p.locator(".qtop input");
   await input.fill("Franz lernen heute 18 Uhr 30 min");
-  ok((await p.locator(".qe .chips span").allTextContents()).join(",").includes("18:00"), "Schnelleingabe zeigt erkannte Uhrzeit");
+  ok((await p.locator(".qtop .chips span").allTextContents()).join(",").includes("18:00"), "Schnelleingabe zeigt erkannte Uhrzeit");
   await shot("02-aufgaben-eingabe");
   await input.press("Enter");
   await wait(80);
