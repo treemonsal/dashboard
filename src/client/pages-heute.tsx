@@ -11,6 +11,7 @@ import { useDay } from "./day";
 import { ExamsCard, GymCard, NotenCard, YearCard } from "./cards";
 import { inbox, upcoming as upcomingTasks, tasksToday, useLatest, useMonthMoney } from "./lib";
 import { dayItems } from "./kalender";
+import { useSuggest } from "./suggest";
 import { useCreateProject, useCreateTask, useEvents, useExams, useHealth, useNow, useProjects, useSettings, useTasks, useToday } from "./queries";
 
 /** Verbleibende wache Zeit bis zur Schlafenszeit als schmaler Balken. */
@@ -31,6 +32,7 @@ function RestBar() {
 
 export function Heute() {
   const d = useDay();
+  const suggest = useSuggest();
   const sheet = useSheet();
   const s = useSettings();
   const exams = useExams().data ?? [];
@@ -130,7 +132,7 @@ export function Heute() {
       <div className="card">
         <h2>Dein Tag</h2>
         <div className="tl">
-          {dayItems({ day: d.today, tasks: d.list, events: dayEvents.events })}
+          {dayItems({ day: d.today, tasks: d.list, events: dayEvents.events, suggest: suggest(d.today, d.list, dayEvents.events, d.today) })}
           {trainingRow}
           <div className="slot pinned">
             <span className="t">{s.sleepTime}</span>

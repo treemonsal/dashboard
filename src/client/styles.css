@@ -29,6 +29,8 @@
   .top a.d { display: inline-flex; align-items: center; min-height: 44px; padding-right: 16px; }
   .iconbtn { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 99px; color: var(--fg2); flex: none; }
   .iconbtn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .rt { text-align: right; color: var(--fg); }
+  .addr { min-height: var(--hit); font-variant-numeric: normal; overflow-wrap: anywhere; }
   .lbl { font-size: var(--t-xs); color: var(--fg2); }
   .pt { font-size: var(--t-h1); font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; color: var(--fg); padding-left: 4px; }
   .pagehead { display: flex; align-items: center; gap: 4px; min-height: 44px; margin-left: -10px; }
@@ -54,7 +56,8 @@
   .tile .v.none { color: var(--fg3); }
   .rest { display: flex; align-items: center; gap: 12px; padding: 0 4px; color: var(--fg2); font-size: var(--t-sm); font-weight: 600; }
   .rest .meter { flex: 1; height: 6px; }
-  .ghost-time { color: var(--fg3); font-weight: 500; }
+  .ghost-time { color: var(--fg3); font-weight: 500; font-size: inherit; min-height: var(--hit); min-width: var(--hit); text-align: left; opacity: 0.7; }
+  .slot .t:has(.ghost-time) { margin-left: 0; }
   .meter { height: 5px; border-radius: 3px; background: var(--card2); overflow: hidden; }
   .meter i { display: block; height: 100%; border-radius: 3px; background: var(--fg); transition: width 0.5s var(--ease); }
   .bars { display: flex; align-items: end; gap: 4px; height: 26px; }
@@ -195,7 +198,7 @@
   .tp { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); min-height: 52px; }
   .tp b { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
   .seg { display: flex; background: var(--card2); border-radius: var(--r-ctl); padding: 3px; gap: 2px; flex: none; }
-  .seg button { min-width: var(--hit); height: var(--hit); white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 9px; display: grid; place-items: center; color: var(--fg3); transition: background 0.25s var(--ease), color 0.2s; font-size: var(--t-sm); font-weight: 600; padding: 0 10px; text-align: center; }
+  .seg button { min-width: var(--hit); height: var(--hit); white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: calc(var(--r-ctl) - 3px); color: var(--fg3); transition: background 0.25s var(--ease), color 0.2s; font-size: var(--t-sm); font-weight: 600; padding: 0 10px; text-align: center; }
   .seg svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
   .seg button[aria-pressed="true"] { background: #3a3a40; color: var(--fg); }
   .seg.tri button[aria-pressed="true"][data-k="1"] { background: var(--orange); color: #000; }
@@ -241,7 +244,7 @@
   .stat .v.none { color: var(--fg3); }
 
   .qe-space { height: 64px; flex: none; }
-  .qe { position: fixed; left: 50%; transform: translateX(-50%); width: min(var(--col), 100%); bottom: calc(max(14px, env(safe-area-inset-bottom, 0px)) + 62px); padding: 0 max(12px, env(safe-area-inset-left, 0px)); z-index: 4; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+  .qe { position: fixed; left: 0; right: 0; margin: 0 auto; width: min(var(--col), 100%); bottom: calc(max(14px, env(safe-area-inset-bottom, 0px)) + 62px); padding: 0 max(12px, env(safe-area-inset-left, 0px)); z-index: 4; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
   .qe > * { pointer-events: auto; }
   .qe .chips { display: flex; gap: 6px; padding-left: 14px; flex-wrap: wrap; }
   .qe .chips span { background: var(--card2); color: var(--fg); font-size: var(--t-xs); font-weight: 600; padding: 5px 10px; border-radius: 99px; }
@@ -284,7 +287,8 @@
   .back svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
   .center { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 8px 0 4px; text-align: center; }
   .chip { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 0 14px; border-radius: 99px; background: var(--card); font-size: var(--t-sm); font-weight: 600; }
-  .chip.btn { min-height: 44px; }
+  .chip.btn { min-height: var(--hit); }
+  .card .chip, .sh .chip { background: var(--card2); }
   .money-n { font-weight: 700; letter-spacing: -0.035em; line-height: 1; display: inline-flex; align-items: baseline; }
   .money-n .cur { font-size: 0.42em; color: var(--fg2); font-weight: 600; letter-spacing: 0; margin-right: 0.35em; }
   .money-n .ct { font-size: 0.5em; color: var(--fg2); font-weight: 600; letter-spacing: 0; margin-left: 1px; }
@@ -303,6 +307,7 @@
   .more { display: flex; justify-content: center; align-items: center; min-height: 52px; width: 100%; color: var(--fg); font-weight: 600; border-top: 1px solid var(--line); }
   .ptabs { display: flex; gap: 8px; }
   .area { display: block; width: 100%; height: 150px; overflow: visible; }
+  .area .fl { fill: var(--card2); stroke: none; }
   .area .ln { fill: none; stroke: var(--fg); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
   .area .pj { fill: none; stroke: var(--fg3); stroke-width: 2; stroke-dasharray: 4 5; stroke-linecap: round; }
   .area .bl { stroke: var(--fg3); stroke-width: 1; stroke-dasharray: 2 4; }

@@ -8,7 +8,7 @@ import { disablePush, enablePush, pushState, type PushState } from "./push";
 import { keys, useAddCalendar, useCalendars, useLastSync, useRemoveCalendar, useSetSetting, useSettings, useSyncCalendars } from "./queries";
 
 
-function ago(iso: string, now = Date.now()): string {
+export function ago(iso: string, now = Date.now()): string {
   const min = Math.floor((now - Date.parse(iso)) / 60_000);
   if (!(min >= 0)) return "gerade eben";
   if (min < 1) return "gerade eben";
@@ -55,7 +55,6 @@ export function KalenderEinstellungen() {
     <>
       <div className="card" style={{ paddingTop: 0 }}>
         <h2>Kalender</h2>
-        {cals.length === 0 && <div className="faint" style={{ paddingBottom: 10, fontSize: 15 }}>Geheime iCal-Adresse aus Google Kalender (Einstellungen, Kalender integrieren). Nur lesen.</div>}
         {cals.map((c) => (
           <div key={c.id}>
             <div className="row">
@@ -133,7 +132,6 @@ export function ErinnerungenEinstellungen() {
 
   return (
     <div className="card" style={{ paddingTop: 0 }}>
-      <h2>Erinnerungen</h2>
       <div className="field" style={{ borderTop: 0 }}>
         <span>Erinnerungen</span>
         <span className={busy || !usable || !configured ? "dim" : ""}>

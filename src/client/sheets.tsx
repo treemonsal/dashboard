@@ -9,6 +9,7 @@ import { navigate } from "./router";
 import { CheckMark, ConfirmDelete, DayToggles, Icon, Segments, Spark, nf } from "./ui";
 import { SwipeRow } from "./swipe";
 import { useDay } from "./day";
+import type { Suggestion } from "../shared/vorschlag";
 import { subjectAverages } from "./lib";
 import {
   useAddGrade, useAddTopic, useCreateTask, useDeleteGrade, useDeletePlan, useDeleteTask, useExam, useFinishSession, useGrades, useGymDay, useGymHistory,
@@ -47,15 +48,22 @@ function taskMeta(t: Task, today: string): { text: string; warn: boolean } {
 }
 
 /** Zeile einer Aufgabe, wischbar (nach links = erledigt), antippbar (Blatt), Kreis rechts hakt ab. */
-export function TaskLine({ task, today, showTime = false }: { task: Task; today: string; showTime?: boolean }) {
+export function TaskLine({ task, today, showTime = false, suggest }: { task: Task; today: string; showTime?: boolean; suggest?: Suggestion }) {
   const toggle = useToggleTask();
+  const upd = useUpdateTask();
   const sheet = useSheet();
   const done = !!task.doneAt;
   const m = taskMeta(task, today);
   return (
     <SwipeRow disabled={done} onComplete={() => toggle.mutate(task.id, true)} onTap={() => sheet.open(<TaskSheet id={task.id} />)}>
       <div className={`slot press ${showTime ? "" : "nl"} ${done ? "done" : ""}`} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && sheet.open(<TaskSheet id={task.id} />)} style={showTime ? undefined : { gridTemplateColumns: "minmax(0,1fr) var(--hit)" }}>
-        {showTime && <span className="t">{task.dueTime ?? ""}</span>}
+        {showTime && (
+          <span className="t">
+            {task.dueTime ?? (suggest && !done ? (
+              <button type="button" className="ghost-time" data-noswipe aria-label={`Auf ${suggest.time} legen`} onClick={(e) => { e.stopPropagation(); upd.mutate({ id: task.id, patch: { dueTime: suggest.time } }); }}>{suggest.time}</button>
+            ) : "")}
+          </span>
+        )}
         {showTime && <span className="dot" style={{ background: done ? "var(--fg3)" : "var(--fg)" }} />}
         <span className="w">
           <b>{task.title}</b>

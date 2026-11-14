@@ -7,6 +7,16 @@ export interface ImportFileIn {
   mapping?: NonNullable<S.ImportFilePreview["mapping"]>;
 }
 
+export interface ConnectorGrant {
+  id: string;
+  clientId: string;
+  clientName: string | null;
+  scope: string[];
+  redirectUri: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -113,5 +123,11 @@ export const api = {
     unsubscribe: (endpoint: string) => post<{ ok: true }>("/push/unsubscribe", { endpoint }),
     test: () => post<S.PushResult>("/push/test"),
   },
+  connector: {
+    grants: () => get<ConnectorGrant[]>("/connector/grants"),
+    revoke: (id: string) => del(`/connector/grants/${encodeURIComponent(id)}`),
+  },
+  taskEvents: () => get<S.TaskEvent[]>("/task-events"),
+  syncRuns: (limit = 30) => get<S.SyncRun[]>(`/sync-runs?limit=${limit}`),
   exportAll: () => get<unknown>("/export"),
 };

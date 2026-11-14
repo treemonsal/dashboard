@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { AbgleichLaeufe, VerbundeneApps } from "./einstellungen-apps";
+import { FitbitEinstellungen, FitbitLeer } from "./fitbit";
 import { ErinnerungenEinstellungen, KalenderEinstellungen } from "./einstellungen-kalender";
 import { addDays, dayCompact, daysBetween, daysUntil, mondayOf, minutesOf, timeInZone, monthLong, WEEKDAY_LETTERS, WEEK_ORDER, weekdayNum } from "../shared/dates";
 import { byCategory, ownShare } from "../shared/geld";
@@ -69,7 +71,7 @@ export function Geld() {
         <button type="button" className="card tap press" onClick={() => sheet.open(<MamaSheet />)}>
           <div className="lrow" style={{ borderTop: 0 }}>
             <span className="ic" style={{ background: "var(--card2)" }}><Icon n="fork" /></span>
-            <span className="w"><b>Offen von Mama</b><span>{s.mamaName || "Hälfte der Mahlzeiten"}</span></span>
+            <span className="w"><b>Offen von Mama</b>{s.mamaName && <span>{s.mamaName}</span>}</span>
             <span className="a"><Money v={mama.open} size={17} cur={false} /></span>
           </div>
         </button>
@@ -181,7 +183,7 @@ export function Koerper() {
   return (
     <div className="view">
       <PageTitle>Körper</PageTitle>
-      {!connected && <div className="card"><div className="empty">Noch nicht mit Fitbit verbunden.</div></div>}
+      {!connected && <FitbitLeer />}
       <div className="grid2">
         <Stat k="Schlaf" metric="sleep" v={sleep.latest?.sleepMin != null ? hm(sleep.latest.sleepMin) : null} />
         <Stat k="Schritte" metric="steps" v={steps.latest?.steps != null ? nf(steps.latest.steps) : null} />
@@ -234,9 +236,11 @@ function LifeGrid({ birth, today }: { birth: string; today: string }) {
     c.style.height = `${cell * ROWS}px`;
     const g = c.getContext("2d")!;
     g.scale(dpr, dpr);
+    const css = getComputedStyle(document.documentElement);
+    const col = { fg: css.getPropertyValue("--fg").trim(), now: css.getPropertyValue("--orange").trim(), dot: css.getPropertyValue("--dot").trim() };
     const pad = Math.max(0.6, cell * 0.16);
     for (let i = 0; i < COLS * ROWS; i++) {
-      g.fillStyle = i < lived ? "#fff" : i === lived ? "#ff9f0a" : "#26262b";
+      g.fillStyle = i < lived ? col.fg : i === lived ? col.now : col.dot;
       const x = (i % COLS) * cell, y = Math.floor(i / COLS) * cell;
       g.beginPath();
       g.roundRect(x + pad / 2, y + pad / 2, cell - pad, cell - pad, 1);
@@ -395,6 +399,9 @@ export function Einstellungen() {
       </div>
       <KalenderEinstellungen />
       <ErinnerungenEinstellungen />
+      <FitbitEinstellungen />
+      <VerbundeneApps />
+      <AbgleichLaeufe />
       <div className="card" style={{ paddingTop: 0 }}>
         <Link href="/plaene" className="row press" style={{ borderTop: 0 }}><div className="l"><b>Trainingspläne</b></div><Icon n="chev" className="" /></Link>
         <button type="button" className="row press" style={{ borderTop: "1px solid var(--line)" }} onClick={exportAll}><div className="l"><b>Daten exportieren</b></div><span className="r">JSON</span></button>

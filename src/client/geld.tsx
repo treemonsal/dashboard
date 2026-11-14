@@ -9,21 +9,21 @@ import { Icon, Money, nf } from "./ui";
 import { useAddInvest, useAllTransactions, useCategories, useInvest, useRemoveInvest, useSetSetting, useSettings, useToday, useUpdateTx } from "./queries";
 
 const uid = () => crypto.randomUUID();
-const CAT: Record<string, { icon: string; color: string }> = {
-  Lebensmittel: { icon: "cart", color: "#30d158" },
-  Transport: { icon: "car", color: "#4da3ff" },
-  "Essen auswärts": { icon: "fork", color: "#ff9f0a" },
-  Snack: { icon: "fork", color: "#ffd60a" },
-  Unterhaltung: { icon: "film", color: "#bf5af2" },
-  Gastronomie: { icon: "fork", color: "#ff9f0a" },
-  "Sparen/Anlage": { icon: "coin", color: "#4da3ff" },
-  Einkommen: { icon: "up", color: "#30d158" },
-  Sonstiges: { icon: "dots", color: "#98989f" },
+const CAT: Record<string, { icon: string }> = {
+  Lebensmittel: { icon: "cart" },
+  Transport: { icon: "car" },
+  "Essen auswärts": { icon: "fork" },
+  Snack: { icon: "fork" },
+  Unterhaltung: { icon: "film" },
+  Gastronomie: { icon: "fork" },
+  "Sparen/Anlage": { icon: "coin" },
+  Einkommen: { icon: "up" },
+  Sonstiges: { icon: "dots" },
 };
 export function CatIcon({ name }: { name?: string | null }) {
   const c = CAT[name ?? ""] ?? CAT.Sonstiges;
   return (
-    <span className="ic" style={{ color: c.color }}>
+    <span className="ic">
       <Icon n={c.icon} />
     </span>
   );
@@ -53,11 +53,8 @@ export function SpendChart({ txs, month, budget, today }: { txs: Transaction[]; 
   return (
     <div>
       <svg className="area" viewBox={`0 0 ${W} ${Hh}`} preserveAspectRatio="none" role="img" aria-label="Verlauf der Ausgaben im Monat">
-        <defs>
-          <linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".22" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></linearGradient>
-        </defs>
         <line className="bl" x1="0" x2={W} y1={Y(budget)} y2={Y(budget)} />
-        {area && <path d={area} fill="url(#ag)" />}
+        {area && <path className="fl" d={area} />}
         {line && <path className="ln" d={line} vectorEffect="non-scaling-stroke" />}
         {isNow && upto < days && pts.length > 0 && <path className="pj" d={`M${pts.at(-1)![0]} ${pts.at(-1)![1]}L${W} ${Y(proj)}`} vectorEffect="non-scaling-stroke" />}
       </svg>

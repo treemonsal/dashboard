@@ -130,7 +130,7 @@ export function DayToggles({ value, onChange, label }: { value: number[]; onChan
 }
 
 /** Zweistufiges Löschen im Blatt: erst "Löschen", dann "Wirklich löschen?" mit Abbrechen. */
-export function ConfirmDelete({ label = "Löschen", onConfirm }: { label?: string; onConfirm: () => void }) {
+export function ConfirmDelete({ label = "Löschen", sure = "Wirklich löschen", onConfirm }: { label?: string; sure?: string; onConfirm: () => void }) {
   const [ask, setAsk] = useState(false);
   return ask ? (
     <div style={{ display: "flex", gap: 10 }}>
@@ -138,7 +138,7 @@ export function ConfirmDelete({ label = "Löschen", onConfirm }: { label?: strin
         Abbrechen
       </button>
       <button type="button" className="cta danger press" onClick={onConfirm}>
-        Wirklich löschen
+        {sure}
       </button>
     </div>
   ) : (

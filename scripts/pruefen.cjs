@@ -106,6 +106,7 @@ const post = (p, url, body, method = "POST") => p.evaluate(async ([u, b, m]) => 
   const before = await ringText();
   // Wischen nach links = erledigt (echte Mausbewegung, schnell in Schritten)
   const row = p.locator(".swipe", { hasText: "Physik" }).first();
+  await row.evaluate((e) => e.scrollIntoView({ block: "center" })); await wait(200);
   const bb = await row.boundingBox();
   await p.mouse.move(bb.x + bb.width - 80, bb.y + bb.height / 2);
   await p.mouse.down();
@@ -122,6 +123,7 @@ const post = (p, url, body, method = "POST") => p.evaluate(async ([u, b, m]) => 
   ok(Math.abs(back) < 2, "Zeile federt nach dem Wischen zurück");
   // kurzes Wischen unter der Schwelle: nichts passiert
   const row2 = p.locator(".swipe", { hasText: "Franz" }).first();
+  await row2.evaluate((e) => e.scrollIntoView({ block: "center" })); await wait(200);
   const b2 = await row2.boundingBox();
   await p.mouse.move(b2.x + 230, b2.y + 28); await p.mouse.down(); for (let i = 1; i <= 5; i++) { await p.mouse.move(b2.x + 230 - i * 6, b2.y + 28); await wait(60); } await wait(120); await p.mouse.up(); await wait(700);
   ok((await ringText()) === after, "Unter der Schwelle bleibt die Aufgabe offen");
