@@ -3,6 +3,7 @@ import { Toast } from "./toast";
 import { Link, usePath } from "./router";
 import { Icon } from "./ui";
 import { Aufgaben, Heute, Ziele } from "./pages-heute";
+import { Woche } from "./kalender";
 import { Analyse, Einstellungen, Geld, Koerper, Plaene, Zeit } from "./pages-rest";
 
 const TABS = [
@@ -13,7 +14,7 @@ const TABS = [
   { href: "/koerper", label: "Körper", icon: "koerper" },
 ];
 // Unterseiten gehören zu einem Tab
-const PARENT: Record<string, string> = { "/plaene": "/ziele", "/analyse": "/geld", "/zeit": "/", "/einstellungen": "/" };
+const PARENT: Record<string, string> = { "/plaene": "/ziele", "/analyse": "/geld", "/zeit": "/", "/woche": "/", "/einstellungen": "/" };
 
 function View({ path }: { path: string }) {
   switch (path) {
@@ -25,6 +26,7 @@ function View({ path }: { path: string }) {
     case "/plaene": return <Plaene />;
     case "/analyse": return <Analyse />;
     case "/zeit": return <Zeit />;
+    case "/woche": return <Woche />;
     case "/einstellungen": return <Einstellungen />;
     default: return <div className="view"><div className="card"><div className="empty">Diese Seite gibt es nicht.</div></div></div>;
   }

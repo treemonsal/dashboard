@@ -19,6 +19,24 @@ export const REGISTER_PATH = "/oauth/register";
 /** Kurze Access-Tokens, Refresh-Tokens rotieren und verfallen nach 30 Tagen ohne Nutzung. */
 export const ACCESS_TOKEN_TTL = 30 * 60;
 const REFRESH_TOKEN_TTL = 30 * 24 * 3600;
+/** Codes gelten hier 5 Minuten (die Bibliothek löscht sie erst nach 10 Minuten aus KV). */
+export const AUTH_CODE_TTL = 5 * 60;
+
+/**
+ * Zusätzliche Prüfung vor dem Token-Endpunkt: ein Code, der älter als AUTH_CODE_TTL ist, wird abgelehnt,
+ * unabhängig davon, ob KV den Eintrag schon entfernt hat. Alles Übrige prüft der OAuthProvider.
+ */
+async function codeTooOld(req: Request, env: McpEnv): Promise<boolean> {
+  if (!(req.headers.get("content-type") ?? "").includes("application/x-www-form-urlencoded")) return false;
+  const form = await req.clone().formData().catch(() => null);
+  if (!form) return false;
+  if (form.get("grant_type") !== "authorization_code") return false;
+  const parts = String(form.get("code") ?? "").split(":");
+  if (parts.length !== 3 || !/^[A-Za-z0-9_-]{1,64}$/.test(parts[0]) || !/^[A-Za-z0-9_-]{1,64}$/.test(parts[1])) return false;
+  const grant = await env.OAUTH_KV.get<{ createdAt?: number; authCodeId?: string }>(`grant:${parts[0]}:${parts[1]}`, "json");
+  if (!grant?.authCodeId || typeof grant.createdAt !== "number") return false;
+  return Math.floor(Date.now() / 1000) - grant.createdAt > AUTH_CODE_TTL;
+}
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const DEFAULT_ORIGIN = "https://dashboard.hahntim518.workers.dev";
@@ -97,6 +115,9 @@ export function createWorker(opts: WorkerOptions = {}) {
         const ip = req.headers.get("cf-connecting-ip") ?? "unknown";
         const { success } = await env.OAUTH_RATE_LIMIT.limit({ key: `${url.pathname}:${ip}` });
         if (!success) return json({ error: "temporarily_unavailable", error_description: "Zu viele Anfragen" }, 429, { "Retry-After": "60" });
+      }
+      if (url.pathname === TOKEN_PATH && req.method === "POST" && (await codeTooOld(req, env))) {
+        return json({ error: "invalid_grant", error_description: "Authorization code expired" }, 400);
       }
       const res = await providerFor(origin).fetch(req, env, ctx);
       const p = url.pathname;

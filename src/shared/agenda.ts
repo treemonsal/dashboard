@@ -40,7 +40,7 @@ export interface DayEvent {
   allDay: boolean;
 }
 
-function lastDayOf(e: CalendarEvent): string {
+export function lastDayOf(e: CalendarEvent): string {
   if (!e.allDay && e.endTime === "00:00" && e.endDate > e.startDate) return addDays(e.endDate, -1);
   return e.endDate < e.startDate ? e.startDate : e.endDate;
 }

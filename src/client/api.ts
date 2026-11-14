@@ -99,5 +99,19 @@ export const api = {
     preview: (files: ImportFileIn[]) => post<S.ImportPreview>("/import/preview", { files }),
     commit: (files: ImportFileIn[]) => post<S.ImportResult>("/import/commit", { files }),
   },
+  calendar: {
+    list: () => get<S.CalendarInfo[]>("/calendars"),
+    create: (b: S.CalendarCreate) => post<S.CalendarInfo>("/calendars", b),
+    remove: (id: string) => del(`/calendars/${id}`),
+    sync: () => post<S.CalendarSyncResult>("/calendar/sync"),
+    events: (from: string, to: string) => get<S.CalendarEvent[]>(`/calendar/events?from=${from}&to=${to}`),
+    lastRun: () => get<S.SyncRun[]>("/sync-runs?kind=kalender&limit=1"),
+  },
+  push: {
+    status: () => get<{ count: number; configured: boolean }>("/push/status"),
+    subscribe: (sub: PushSubscriptionJSON) => post<{ ok: true }>("/push/subscribe", sub),
+    unsubscribe: (endpoint: string) => post<{ ok: true }>("/push/unsubscribe", { endpoint }),
+    test: () => post<S.PushResult>("/push/test"),
+  },
   exportAll: () => get<unknown>("/export"),
 };

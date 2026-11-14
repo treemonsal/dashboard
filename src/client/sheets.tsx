@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { addDays, dayCompact, daysUntil, inDays, todayInZone, weekdayNum, WEEKDAY_LETTERS, WEEK_ORDER } from "../shared/dates";
 import { neededGrade } from "../shared/calc";
+import { buildRule, describeRule, parseRepeat } from "../shared/recurrence";
 import type { GymPlan, GymSet, Task } from "../shared/schemas";
 import { useSheet } from "./sheet";
 import { navigate } from "./router";
@@ -41,6 +42,7 @@ function taskMeta(t: Task, today: string): { text: string; warn: boolean } {
   } else if (t.dueDate && t.dueDate > today) parts.push(dayCompact(t.dueDate));
   if (t.dueTime && !(t.dueDate === today)) parts.push(t.dueTime);
   if (t.durationMin) parts.push(`${t.durationMin} min`);
+  if (t.recurrence) parts.push(describeRule(t.recurrence));
   return { text: parts.join(" · "), warn };
 }
 
@@ -62,6 +64,43 @@ export function TaskLine({ task, today, showTime = false }: { task: Task; today:
         <Check done={done} onToggle={() => toggle.mutate(task.id, !done)} label={done ? "Wieder öffnen" : "Erledigen"} />
       </div>
     </SwipeRow>
+  );
+}
+
+const REPEAT_OPTIONS: [string, string][] = [["none", "Nie"], ["daily", "Täglich"], ["weekdays", "Werktags"], ["weekly", "Wöchentlich"], ["every", "Alle n Tage"], ["monthly", "Monatlich"], ["yearly", "Jährlich"]];
+
+/** Wiederholung wählen: beim Erledigen entsteht die nächste Aufgabe. */
+function RepeatField({ rule, dueDate, onChange }: { rule: string | null; dueDate: string | null; onChange: (r: string | null) => void }) {
+  const r = parseRepeat(rule);
+  const pick = (k: string) => {
+    if (k === "other") return;
+    onChange(k === "none" ? null : k === "weekly" ? buildRule({ kind: "weekly", days: [] }, dueDate) : k === "every" ? buildRule({ kind: "every", n: 2 }) : buildRule({ kind: k as "daily" | "weekdays" | "monthly" | "yearly" }));
+  };
+  return (
+    <>
+      <div className="field">
+        <label htmlFor="ts-r">Wiederholen</label>
+        <select id="ts-r" className="inp" value={r.kind} onChange={(e) => pick(e.target.value)}>
+          {REPEAT_OPTIONS.map(([k, l]) => (<option key={k} value={k}>{l}</option>))}
+          {r.kind === "other" && <option value="other">Eigene Regel</option>}
+        </select>
+      </div>
+      {r.kind === "weekly" && (
+        <div className="field" style={{ justifyContent: "flex-end" }}>
+          <DayToggles label="Wochentage" value={r.days.length ? r.days : dueDate ? [weekdayNum(dueDate)] : []} onChange={(days) => onChange(buildRule({ kind: "weekly", days }, dueDate))} />
+        </div>
+      )}
+      {r.kind === "every" && (
+        <div className="field">
+          <label htmlFor="ts-rn">Alle</label>
+          <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input id="ts-rn" key={r.n} className="inp num" inputMode="numeric" defaultValue={r.n}
+              onBlur={(e) => { const n = Math.round(num(e.target.value) ?? 0); if (n >= 1 && n <= 365 && n !== r.n) onChange(buildRule({ kind: "every", n })); else e.target.value = String(r.n); }} />
+            <span className="faint">Tage</span>
+          </span>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -106,6 +145,7 @@ export function TaskSheet({ id }: { id: string }) {
           <span className="faint">min</span>
         </span>
       </div>
+      <RepeatField rule={t.recurrence} dueDate={t.dueDate} onChange={(recurrence) => set({ recurrence })} />
       {projects.length > 0 && (
         <div className="field">
           <label htmlFor="ts-p">Projekt</label>

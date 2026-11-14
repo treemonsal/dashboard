@@ -146,7 +146,7 @@ export function buildServer(db: Db, scopes: readonly string[]): McpServer {
       "list_events",
       {
         title: "List calendar events",
-        description: "List calendar events between two dates (default: today plus 6 days). Returns an empty list with a note if no calendar is set up.",
+        description: "List calendar events overlapping a date range (default: today plus 6 days, max 93 days). Homework entries and exams already listed by list_exams are hidden, as in the app.",
         inputSchema: z.object({ from: date.optional(), to: date.optional() }),
         annotations: READ,
         _meta: meta("list_events"),

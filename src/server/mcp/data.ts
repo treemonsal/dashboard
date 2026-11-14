@@ -7,6 +7,9 @@ import { MIN_SUBJECT, TARGET_AVERAGE, neededGrade, overallAverage, weightedAvera
 import { budgetOf, byCategory, depositTotal, mamaBalance, monthSummary } from "../../shared/geld";
 import { addDays, daysUntil, mondayOf, timeInZone, todayInZone, weekdayLong, weekdayNum, zoneMidnightUtc } from "../../shared/dates";
 import { newId, nowIso, type Db } from "../util";
+import { visibleEvents } from "../../shared/agenda";
+import { nextDue } from "../../shared/recurrence";
+import type { CalendarEvent } from "../../shared/schemas";
 
 /** Fehler, die als Werkzeug-Fehler (isError) an das Modell gehen, nicht als Serverfehler. */
 export class ToolInputError extends Error {}
@@ -129,7 +132,21 @@ export async function completeTask(db: Db, id: string, actualMin?: number, now: 
     durationMin: actualMin ?? cur.durationMin,
     plannedMin: cur.durationMin,
   });
-  return { alreadyDone: false, task: taskOut(row!, names) };
+  // Wiederkehrende Aufgabe: wie in der App entsteht die nächste sofort, mit denselben Angaben.
+  const next = cur.recurrence ? nextDue(cur.recurrence, cur.dueDate, day) : null;
+  let nextTask = null;
+  if (next) {
+    const n = await db
+      .insert(t.tasks)
+      .values({
+        id: newId(), title: cur.title, notes: cur.notes, projectId: cur.projectId, parentId: cur.parentId, dueDate: next, dueTime: cur.dueTime,
+        priority: cur.priority, recurrence: cur.recurrence, durationMin: cur.durationMin, examId: cur.examId, sortOrder: cur.sortOrder,
+      })
+      .returning()
+      .get();
+    nextTask = taskOut(n, names);
+  }
+  return { alreadyDone: false, task: taskOut(row!, names), next: nextTask };
 }
 
 /* ---------- Schule ---------- */
@@ -423,48 +440,55 @@ export async function healthSummary(db: Db, days: number) {
 /* ---------- Termine ---------- */
 
 /**
- * Termine aus der Tabelle calendar_events, falls es sie gibt. Die Spalten werden zur Laufzeit gelesen,
- * damit das Werkzeug auch mit einer späteren Fassung der Tabelle funktioniert.
+ * Termine, die den Zeitraum berühren (auch mehrtägige, die vorher begonnen haben), wie GET /api/calendar/events.
+ * Ausgeblendet wird wie in der App: Hausaufgaben (Einstellung) und Prüfungen, die schon als Prüfung eingetragen sind.
+ * Die Kalender-Adresse (Zugangsschlüssel) wird nie gelesen.
  */
 export async function listEvents(db: Db, q: { from?: string; to?: string }) {
   const from = q.from ?? todayInZone();
   const to = q.to ?? addDays(from, 6);
-  const exists = await db.get<{ n: number }>(sql`select count(*) as n from sqlite_master where type = 'table' and name = 'calendar_events'`);
-  if (!exists?.n) return { from, to, count: 0, events: [], hinweis: "Es gibt noch keine Termine (Kalender ist nicht eingerichtet)." };
-  const cols = new Set((await db.all<{ name: string }>(sql`select name from pragma_table_info('calendar_events')`)).map((c) => c.name));
-  const pick = (...names: string[]) => names.find((n) => cols.has(n));
-  const startCol = pick("start_date", "date", "day");
-  if (!startCol) return { from, to, count: 0, events: [], hinweis: "Die Termintabelle hat ein unbekanntes Format." };
-  const fields: Record<string, string | undefined> = {
-    id: pick("id"),
-    title: pick("title", "summary", "name"),
-    startDate: startCol,
-    startTime: pick("start_time"),
-    endDate: pick("end_date"),
-    endTime: pick("end_time"),
-    allDay: pick("all_day"),
-    location: pick("location"),
-    calendar: pick("calendar_name", "calendar", "source"),
-  };
-  const sel = Object.entries(fields)
-    .filter(([, c]) => c)
-    .map(([k, c]) => `"${c}" as "${k}"`)
-    .join(", ");
-  const order = `"${startCol}"${fields.startTime ? `, "${fields.startTime}"` : ""}`;
-  const rows = await db.all<Record<string, unknown>>(sql.raw(`select ${sel} from calendar_events where "${startCol}" >= '${from}' and "${startCol}" <= '${to}' order by ${order} limit 500`));
-  const events = rows.map((r) => ({
-    id: r.id ?? null,
-    title: r.title ?? null,
-    date: r.startDate,
-    weekday: typeof r.startDate === "string" ? weekdayLong(r.startDate) : null,
-    startTime: r.startTime ?? null,
-    endDate: r.endDate ?? null,
-    endTime: r.endTime ?? null,
-    allDay: r.allDay === undefined ? null : !!r.allDay,
-    location: r.location ?? null,
-    calendar: r.calendar ?? null,
+  if (to < from) throw new ToolInputError("'to' liegt vor 'from'.");
+  if (to > addDays(from, 92)) throw new ToolInputError("Höchstens 93 Tage auf einmal.");
+  const rows = await db
+    .select({ e: t.calendarEvents, calendarName: t.calendars.name })
+    .from(t.calendarEvents)
+    .innerJoin(t.calendars, eq(t.calendars.id, t.calendarEvents.calendarId))
+    .where(and(lte(t.calendarEvents.startDate, to), gte(t.calendarEvents.endDate, from)))
+    .orderBy(asc(t.calendarEvents.startDate), sql`${t.calendarEvents.startTime} is null`, asc(t.calendarEvents.startTime))
+    .limit(500);
+  const all: CalendarEvent[] = rows.map(({ e, calendarName }) => ({
+    id: e.id, calendarId: e.calendarId, calendarName, uid: e.uid, title: e.title, startDate: e.startDate, startTime: e.startTime,
+    endDate: e.endDate, endTime: e.endTime, allDay: e.allDay, location: e.location, description: e.description,
   }));
-  return { from, to, count: events.length, events };
+  const settings = await loadSettings(db);
+  const exams = await db
+    .select({ date: t.exams.date, subjectCode: t.subjects.code, subjectName: t.subjects.name })
+    .from(t.exams)
+    .innerJoin(t.subjects, eq(t.subjects.id, t.exams.subjectId))
+    .where(and(gte(t.exams.date, from), lte(t.exams.date, to)));
+  const shown = visibleEvents(all, { hideHomework: settings.hideHomework === "1", exams });
+  const events = shown.map((e) => ({
+    id: e.id,
+    title: e.title,
+    date: e.startDate,
+    weekday: weekdayLong(e.startDate),
+    startTime: e.startTime,
+    endDate: e.endDate,
+    endTime: e.endTime,
+    allDay: e.allDay,
+    location: e.location,
+    description: e.description ? e.description.slice(0, 500) : null,
+    calendar: e.calendarName,
+  }));
+  const calendarsSet = (await db.select({ id: t.calendars.id }).from(t.calendars).limit(1)).length > 0;
+  return {
+    from,
+    to,
+    count: events.length,
+    hidden: all.length - shown.length,
+    events,
+    ...(calendarsSet ? {} : { hinweis: "Es ist noch kein Kalender eingerichtet." }),
+  };
 }
 
 /* ---------- Überblick ---------- */

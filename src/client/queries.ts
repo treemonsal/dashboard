@@ -1,9 +1,10 @@
 // Datenzugriff mit sofortiger Reaktion: Änderungen erscheinen zuerst lokal und werden bei Fehlern zurückgerollt.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { api } from "./api";
 import { notify } from "./toast";
 import { addDays, mondayOf, todayInZone } from "../shared/dates";
+import { visibleEvents } from "../shared/agenda";
 import { SETTING_DEFAULTS } from "../shared/settings";
 import type * as S from "../shared/schemas";
 
@@ -24,6 +25,10 @@ export const keys = {
   tx: (m: string) => ["tx", m] as const,
   invest: ["invest"] as const,
   health: (from: string, to: string) => ["health", from, to] as const,
+  calendars: ["calendars"] as const,
+  events: (from: string, to: string) => ["events", from, to] as const,
+  lastSync: ["last-sync"] as const,
+  pushStatus: ["push-status"] as const,
 };
 
 /** Aktuelle Zeit, minütlich aktualisiert (für Tag, Balken und Countdown). */
@@ -261,5 +266,43 @@ export function usePutHealth() {
     key: ["health"],
     fn: ({ day, patch }) => api.health.put(day, patch),
     after: () => void qc.invalidateQueries({ queryKey: ["health"] }),
+  });
+}
+
+/* ---------- Kalender (nur lesen) ---------- */
+export const useCalendars = () => useQuery({ queryKey: keys.calendars, queryFn: api.calendar.list });
+export const useLastSync = () => useQuery({ queryKey: keys.lastSync, queryFn: api.calendar.lastRun });
+
+/** Termine eines Zeitraums, schon ohne ausgeblendete Hausaufgaben und ohne Prüfungs-Dubletten. */
+export function useEvents(from: string, to: string) {
+  const q = useQuery({ queryKey: keys.events(from, to), queryFn: () => api.calendar.events(from, to) });
+  const exams = useExams().data;
+  const subjects = useSubjects().data;
+  const hide = useSettings().hideHomework !== "0";
+  const events = useMemo(() => {
+    const names = new Map((subjects ?? []).map((s) => [s.code, s.name ?? null]));
+    return visibleEvents(q.data ?? [], { hideHomework: hide, exams: (exams ?? []).map((e) => ({ date: e.date, subjectCode: e.subjectCode, subjectName: names.get(e.subjectCode) ?? null })) });
+  }, [q.data, exams, subjects, hide]);
+  return { events, loaded: !q.isPending };
+}
+
+export function useAddCalendar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (b: S.CalendarCreate) => api.calendar.create(b),
+    onSettled: () => void qc.invalidateQueries({ queryKey: keys.calendars }),
+  });
+}
+export function useRemoveCalendar() {
+  return useOpt<string, S.CalendarInfo[]>({ key: keys.calendars, fn: (id) => api.calendar.remove(id), apply: (d, id) => d.filter((c) => c.id !== id), also: [["events"]] });
+}
+export function useSyncCalendars() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.calendar.sync,
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["events"] });
+      void qc.invalidateQueries({ queryKey: keys.lastSync });
+    },
   });
 }

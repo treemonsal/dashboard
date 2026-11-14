@@ -10,6 +10,11 @@ export default defineConfig({
     tailwindcss(),
     cloudflare(),
     VitePWA({
+      // Eigener Service Worker (src/client/sw.ts): App-Hülle vorhalten und Erinnerungen (push, notificationclick).
+      strategies: "injectManifest",
+      srcDir: "src/client",
+      filename: "sw.ts",
+      injectManifest: { globPatterns: ["**/*.{js,css,html,woff2,svg,png}"] },
       registerType: "autoUpdate",
       injectRegister: false,
       // Hinter Cloudflare Access muss das Manifest mit Cookie geladen werden.
@@ -31,13 +36,6 @@ export default defineConfig({
           { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
           { src: "/icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
-      },
-      workbox: {
-        // Nur die App-Hülle wird vorgehalten. Daten (/api) gehen immer ans Netz.
-        globPatterns: ["**/*.{js,css,html,woff2,svg,png}"],
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/api\//, /^\/cdn-cgi\//],
-        cleanupOutdatedCaches: true,
       },
     }),
   ],

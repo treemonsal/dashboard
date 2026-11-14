@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { dayMonthLong, daysUntil, numberWord, weekdayLong, dayCompact, minutesOf } from "../shared/dates";
 import { parseQuick } from "../shared/parse";
+import { describeRule } from "../shared/recurrence";
 import { Link } from "./router";
 import { useSheet } from "./sheet";
 import { Check, ExamSheet, TagSheet, TaskLine, TrainingSheet } from "./sheets";
@@ -9,7 +10,8 @@ import { CheckMark, Icon, Money, Ring, Meter, Empty, nf, hm } from "./ui";
 import { useDay } from "./day";
 import { ExamsCard, GymCard, NotenCard, YearCard } from "./cards";
 import { inbox, upcoming as upcomingTasks, tasksToday, useLatest, useMonthMoney } from "./lib";
-import { useCreateProject, useCreateTask, useExams, useHealth, useProjects, useSettings, useTasks, useToday } from "./queries";
+import { dayItems } from "./kalender";
+import { useCreateProject, useCreateTask, useEvents, useExams, useHealth, useProjects, useSettings, useTasks, useToday } from "./queries";
 
 export function Heute() {
   const d = useDay();
@@ -20,6 +22,7 @@ export function Heute() {
   const sleep = useLatest("sleepMin");
   const steps = useLatest("steps");
   const h7 = useHealth(7);
+  const dayEvents = useEvents(d.today, d.today);
   const remaining = d.total - d.done;
   const timed = d.list.filter((t) => t.dueTime);
   const untimed = d.list.filter((t) => !t.dueTime);
@@ -44,7 +47,7 @@ export function Heute() {
   return (
     <div className="view">
       <div className="top">
-        <span className="d">{weekdayLong(d.today)}, {dayMonthLong(d.today)}</span>
+        <Link href="/woche" className="d press" aria-label="Woche öffnen">{weekdayLong(d.today)}, {dayMonthLong(d.today)}</Link>
         <Link href="/einstellungen" className="iconbtn press" aria-label="Einstellungen">
           <Icon n="gear" />
         </Link>
@@ -109,8 +112,7 @@ export function Heute() {
       <div className="card">
         <h2>Dein Tag</h2>
         <div className="tl">
-          {timed.map((t) => (<TaskLine key={t.id} task={t} today={d.today} showTime />))}
-          {untimed.map((t) => (<TaskLine key={t.id} task={t} today={d.today} showTime />))}
+          {dayItems({ day: d.today, tasks: d.list, events: dayEvents.events })}
           {trainingRow}
           <div className="slot pinned">
             <span className="t">{s.sleepTime}</span>
@@ -154,6 +156,7 @@ export function Aufgaben() {
       dueDate: parsed.dueDate,
       dueTime: parsed.dueTime,
       durationMin: parsed.durationMin,
+      recurrence: parsed.recurrence,
       projectId: seg === "projekte" ? openProject : null,
     });
     setText("");
@@ -165,7 +168,7 @@ export function Aufgaben() {
     const g = groups.find((x) => x[0] === t.dueDate);
     g ? g[1].push(t) : groups.push([t.dueDate!, [t]]);
   }
-  const chips = parsed ? [parsed.dueDate && (parsed.dueDate === today ? "heute" : dayCompact(parsed.dueDate)), parsed.dueTime, parsed.durationMin && `${parsed.durationMin} min`].filter(Boolean) : [];
+  const chips = parsed ? [parsed.dueDate && (parsed.dueDate === today ? "heute" : dayCompact(parsed.dueDate)), parsed.dueTime, parsed.durationMin && `${parsed.durationMin} min`, parsed.recurrence && describeRule(parsed.recurrence)].filter(Boolean) : [];
 
   return (
     <div className="view">

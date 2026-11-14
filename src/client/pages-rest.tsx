@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ErinnerungenEinstellungen, KalenderEinstellungen } from "./einstellungen-kalender";
 import { addDays, dayCompact, daysBetween, daysUntil, mondayOf, minutesOf, clockOf, timeInZone, monthLong, WEEKDAY_LETTERS, WEEK_ORDER, weekdayNum } from "../shared/dates";
 import { byCategory, ownShare } from "../shared/geld";
 import { api } from "./api";
@@ -396,6 +397,8 @@ export function Einstellungen() {
         <div className="field"><label htmlFor="s-i">Einzahlung S&amp;P 500</label><input id="s-i" className="inp num" inputMode="decimal" defaultValue={s.investMonthly} onBlur={(e) => { const n = num(e.target.value); if (n !== null && String(n) !== s.investMonthly) set({ investMonthly: String(n) }); }} /></div>
         <div className="field"><label htmlFor="s-m">Mahlzeiten zahlt</label><input id="s-m" className="inp" placeholder="Name" defaultValue={s.mamaName} maxLength={60} onBlur={(e) => e.target.value.trim() !== s.mamaName && set({ mamaName: e.target.value.trim() })} /></div>
       </div>
+      <KalenderEinstellungen />
+      <ErinnerungenEinstellungen />
       <div className="card" style={{ paddingTop: 0 }}>
         <Link href="/plaene" className="row press" style={{ borderTop: 0 }}><div className="l"><b>Trainingspläne</b></div><Icon n="chev" className="" /></Link>
         <button type="button" className="row press" style={{ borderTop: "1px solid var(--line)" }} onClick={exportAll}><div className="l"><b>Daten exportieren</b></div><span className="r">JSON</span></button>
