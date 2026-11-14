@@ -1,13 +1,13 @@
 // Geldrechnung. Negativ = Ausgabe. Mahlzeiten auswärts: die Mutter zahlt die Hälfte zurück.
 import type { Transaction } from "./schemas";
 
-type Tx = Pick<Transaction, "id" | "date" | "amount" | "mealOut" | "isRepayment" | "settledAt" | "categoryId">;
+type Tx = Pick<Transaction, "id" | "date" | "amount" | "mealOut" | "isRepayment" | "settledAt" | "categoryId"> & { internal?: boolean };
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
 
 /** Eigener Anteil einer Ausgabe: bei Mahlzeiten auswärts die Hälfte. */
 export function ownShare(t: Tx): number {
-  if (t.amount >= 0 || t.isRepayment) return 0;
+  if (t.amount >= 0 || t.isRepayment || t.internal) return 0;
   return t.mealOut ? -t.amount / 2 : -t.amount;
 }
 
@@ -24,7 +24,7 @@ export interface MonthSummary {
 
 export function monthSummary(txs: Tx[], budget: number): MonthSummary {
   const spent = r2(txs.reduce((s, t) => s + ownShare(t), 0));
-  const income = r2(txs.filter((t) => t.amount > 0 && !t.isRepayment).reduce((s, t) => s + t.amount, 0));
+  const income = r2(txs.filter((t) => t.amount > 0 && !t.isRepayment && !t.internal).reduce((s, t) => s + t.amount, 0));
   return { spent, left: r2(budget - spent), budget, income, hasData: txs.length > 0 };
 }
 

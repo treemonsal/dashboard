@@ -146,7 +146,7 @@
   /* Tab-Leiste: schwebende Pille, Symbol und Beschriftung, aktive Tab mit dunklerer Pille dahinter */
   .tabs { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(12px, env(safe-area-inset-bottom, 0px)); display: flex; gap: 0; padding: 5px; border-radius: 99px;
     background: rgba(40, 40, 44, 0.72); -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%); border: 1px solid var(--line); z-index: 5; max-width: calc(100vw - 16px); }
-  .tabs a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 56px; width: 64px; border-radius: 99px; color: var(--fg2); font-size: 11px; font-weight: 600; transition: background 0.3s var(--ease), color 0.2s, transform 0.3s var(--ease); touch-action: manipulation; }
+  .tabs a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 56px; width: 68px; border-radius: 99px; color: var(--fg2); font-size: 11px; font-weight: 600; transition: background 0.3s var(--ease), color 0.2s, transform 0.3s var(--ease); touch-action: manipulation; }
   .tabs a[data-down] { transform: scale(0.97); transition-duration: 0.06s; }
   .tabs a[aria-current="page"] { background: rgba(0, 0, 0, 0.55); color: var(--fg); }
   .tabs svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }

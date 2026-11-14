@@ -209,6 +209,52 @@ export const investmentEntryCreate = z.object({
   note: optText(200),
 });
 
+/* ---------- Bank-Import ---------- */
+const colIdx = z.number().int().min(0).max(200);
+export const columnMapping = z.object({
+  date: colIdx.optional(),
+  valuta: colIdx.optional(),
+  description: z.union([colIdx, z.array(colIdx).max(10)]).optional(),
+  amount: colIdx.optional(),
+  debit: colIdx.optional(),
+  credit: colIdx.optional(),
+  balance: colIdx.optional(),
+  currency: colIdx.optional(),
+  amountChf: colIdx.optional(),
+  counterparty: colIdx.optional(),
+  headerRow: colIdx.optional(),
+  delimiter: z.string().max(2).optional(),
+  defaultCurrency: z.string().max(3).optional(),
+});
+export const importRequest = z.object({
+  files: z
+    .array(z.object({ name: z.string().max(200), text: z.string().max(20_000_000), mapping: columnMapping.optional() }))
+    .min(1)
+    .max(12),
+});
+export interface ImportFilePreview {
+  name: string;
+  bank: string;
+  account: string | null;
+  total: number;
+  fresh: number;
+  duplicates: number;
+  warnings: string[];
+  needsConfirmation: boolean;
+  header: string[] | null;
+  mapping: z.infer<typeof columnMapping> | null;
+  /** Erste neue Buchungen als Vorschau (Rappen) */
+  sample: { date: string; description: string; amountChf: number; category: string }[];
+}
+export interface ImportPreview {
+  files: ImportFilePreview[];
+  fresh: number;
+  duplicates: number;
+}
+export interface ImportResult extends ImportPreview {
+  inserted: number;
+}
+
 /* ---------- Körper ---------- */
 export const healthUpsert = z
   .object({
@@ -431,6 +477,8 @@ export interface Transaction {
   mealOut: boolean;
   isRepayment: boolean;
   settledAt: string | null;
+  internal: boolean;
+  currency: string;
 }
 
 export interface HealthDay {

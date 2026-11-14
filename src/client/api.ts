@@ -1,6 +1,12 @@
 // Dünne Hülle um die eigene API. Typen kommen aus src/shared.
 import type * as S from "../shared/schemas";
 
+export interface ImportFileIn {
+  name: string;
+  text: string;
+  mapping?: NonNullable<S.ImportFilePreview["mapping"]>;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -88,6 +94,10 @@ export const api = {
   health: {
     list: (from: string, to: string) => get<S.HealthDay[]>(`/health?from=${from}&to=${to}`),
     put: (day: string, b: S.HealthUpsert) => put<S.HealthDay>(`/health/${day}`, b),
+  },
+  bank: {
+    preview: (files: ImportFileIn[]) => post<S.ImportPreview>("/import/preview", { files }),
+    commit: (files: ImportFileIn[]) => post<S.ImportResult>("/import/commit", { files }),
   },
   exportAll: () => get<unknown>("/export"),
 };

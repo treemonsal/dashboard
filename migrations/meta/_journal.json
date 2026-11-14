@@ -22,6 +22,13 @@
       "when": 1794611713124,
       "tag": "0002_mahlzeit",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1794617070105,
+      "tag": "0003_bankimport",
+      "breakpoints": true
     }
   ]
 }

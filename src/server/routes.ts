@@ -14,6 +14,7 @@ import {
   gymSessionUpdate,
   gymSetUpdate,
   healthQuery,
+  importRequest,
   healthUpsert,
   isoDate,
   settingsUpdate,
@@ -29,6 +30,7 @@ import {
 } from "../shared/schemas";
 import { planStudyBlocks } from "../shared/lernplan";
 import { todayInZone, weekdayNum } from "../shared/dates";
+import { commitImport, learnFromCorrection, previewImport, recompute } from "./bankimport";
 import { batch, idParam, newId, nowIso, notFound, v, type AppEnv, type Db } from "./util";
 
 const t = schema;
@@ -75,7 +77,7 @@ function writePlan(planId: string, b: z.infer<typeof gymPlanWrite>, sortOrder?: 
 
 const toTx = (r: typeof t.transactions.$inferSelect) => ({
   id: r.id, accountId: r.accountId, categoryId: r.categoryId, date: r.date, amount: r.amount, description: r.description,
-  mealOut: r.mealOut, isRepayment: r.isRepayment, settledAt: r.settledAt,
+  mealOut: r.mealOut, isRepayment: r.isRepayment, settledAt: r.settledAt, internal: r.internal, currency: r.currency,
 });
 
 /** Kategorie "Essen auswärts" setzt "Mahlzeit auswärts" standardmässig, alles andere (auch Snack) nicht. */
@@ -127,6 +129,7 @@ export function registerExtra(api: Hono<AppEnv>) {
       accounts: await db.select().from(t.accounts),
       categories: await db.select().from(t.categories),
       transactions: await db.select().from(t.transactions),
+      categoryRules: await db.select().from(t.categoryRules),
       investmentEntries: await db.select().from(t.investmentEntries),
       healthDaily: await db.select().from(t.healthDaily),
     };
@@ -331,8 +334,17 @@ export function registerExtra(api: Hono<AppEnv>) {
     const { settled, ...rest } = c.req.valid("json");
     const set: Partial<typeof t.transactions.$inferInsert> = { ...rest, updatedAt: nowIso() };
     if (settled !== undefined) set.settledAt = settled ? nowIso() : null;
-    const row = await c.var.db.update(t.transactions).set(set).where(eq(t.transactions.id, c.req.valid("param").id)).returning().get();
-    return row ? c.json(toTx(row)) : notFound(c);
+    const txId = c.req.valid("param").id;
+    const before = await c.var.db.select({ categoryId: t.transactions.categoryId }).from(t.transactions).where(eq(t.transactions.id, txId)).get();
+    // Von Hand umgeschaltet: Mahlzeit ja/nein bleibt bei späteren Importen bestehen.
+    if (rest.mealOut !== undefined) set.mealOverride = rest.mealOut;
+    const row = await c.var.db.update(t.transactions).set(set).where(eq(t.transactions.id, txId)).returning().get();
+    if (!row) return notFound(c);
+    // Kategorie korrigiert: Regel lernen (gilt ab dem nächsten Import und für gleichartige "Sonstiges"-Buchungen)
+    if (rest.categoryId && rest.categoryId !== before?.categoryId) await learnFromCorrection(c.var.db, txId, rest.categoryId);
+    else if (rest.mealOut !== undefined || rest.isRepayment !== undefined) await recompute(c.var.db);
+    const fresh = await c.var.db.select().from(t.transactions).where(eq(t.transactions.id, txId)).get();
+    return c.json(toTx(fresh ?? row));
   });
   api.delete("/transactions/:id", v("param", idParam), async (c) => {
     const row = await c.var.db.delete(t.transactions).where(eq(t.transactions.id, c.req.valid("param").id)).returning({ id: t.transactions.id }).get();
@@ -353,6 +365,11 @@ export function registerExtra(api: Hono<AppEnv>) {
     const row = await c.var.db.delete(t.investmentEntries).where(eq(t.investmentEntries.id, c.req.valid("param").id)).returning({ id: t.investmentEntries.id }).get();
     return row ? c.json({ ok: true }) : notFound(c);
   });
+
+  /* ---------- Bank-Import ---------- */
+  api.post("/import/preview", v("json", importRequest), async (c) => c.json(await previewImport(c.var.db, c.req.valid("json").files)));
+  api.post("/import/commit", v("json", importRequest), async (c) => c.json(await commitImport(c.var.db, c.req.valid("json").files), 201));
+  api.get("/category-rules", async (c) => c.json(await c.var.db.select().from(t.categoryRules).orderBy(desc(t.categoryRules.createdAt))));
 
   /* ---------- Körper ---------- */
   api.get("/health", v("query", healthQuery), async (c) => {

@@ -4,6 +4,7 @@ import { addDays, dayCompact, daysBetween, monthLong, todayInZone } from "../sha
 import { byCategory, depositTotal, mamaBalance, ownShare } from "../shared/geld";
 import type { Category, InvestmentEntry, Transaction } from "../shared/schemas";
 import { useSheet } from "./sheet";
+import { notify } from "./toast";
 import { Icon, Money, nf } from "./ui";
 import { useAddInvest, useAllTransactions, useCategories, useInvest, useRemoveInvest, useSetSetting, useSettings, useToday, useUpdateTx } from "./queries";
 
@@ -12,9 +13,11 @@ const CAT: Record<string, { icon: string; color: string }> = {
   Lebensmittel: { icon: "cart", color: "#30d158" },
   Transport: { icon: "car", color: "#4da3ff" },
   "Essen auswärts": { icon: "fork", color: "#ff9f0a" },
-  Gastronomie: { icon: "fork", color: "#ff9f0a" },
   Snack: { icon: "fork", color: "#ffd60a" },
   Unterhaltung: { icon: "film", color: "#bf5af2" },
+  Gastronomie: { icon: "fork", color: "#ff9f0a" },
+  "Sparen/Anlage": { icon: "coin", color: "#4da3ff" },
+  Einkommen: { icon: "up", color: "#30d158" },
   Sonstiges: { icon: "dots", color: "#98989f" },
 };
 export function CatIcon({ name }: { name?: string | null }) {
@@ -74,7 +77,7 @@ export function TxRow({ t, cats }: { t: Transaction; cats: Category[] }) {
       <CatIcon name={t.isRepayment ? "Sonstiges" : c?.name} />
       <span className="w">
         <b>{t.description || c?.name || (t.isRepayment ? "Rückzahlung" : "Buchung")}</b>
-        <span>{dayCompact(t.date)}{c ? ` · ${c.name}` : ""}{t.mealOut ? " · Mahlzeit" : ""}{t.isRepayment ? " · Rückzahlung" : ""}</span>
+        <span>{dayCompact(t.date)}{c ? ` · ${c.name}` : ""}{t.mealOut ? " · Mahlzeit" : ""}{t.isRepayment ? " · Rückzahlung" : ""}{t.internal ? " · eigene Überweisung" : ""}{t.currency !== "CHF" ? ` · ${t.currency}` : ""}</span>
       </span>
       <span className="a"><Money v={t.amount} size={17} cur={false} signed /></span>
     </button>
@@ -94,7 +97,7 @@ export function TxSheet({ id }: { id: string }) {
       <div className="when"><Money v={t.amount} size={26} signed /> · {dayCompact(t.date)}</div>
       <div className="field">
         <label htmlFor="tx-c">Kategorie</label>
-        <select id="tx-c" className="inp" value={t.categoryId ?? ""} onChange={(e) => set({ categoryId: e.target.value || null })}>
+        <select id="tx-c" className="inp" value={t.categoryId ?? ""} onChange={(e) => { set({ categoryId: e.target.value || null }); if (e.target.value && t.description) notify("Gemerkt für ähnliche Buchungen"); }}>
           <option value="">Keine</option>
           {cats.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
         </select>

@@ -240,6 +240,8 @@ export const accounts = sqliteTable("accounts", {
   bank: text("bank"),
   currency: text("currency").notNull().default("CHF"),
   openingBalance: real("opening_balance").notNull().default(0),
+  // Kennung aus dem Bank-Export (IBAN oder Bankname), damit weitere Uploads demselben Konto zugeordnet werden
+  ref: text("ref"),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps,
 });
@@ -267,9 +269,17 @@ export const transactions = sqliteTable(
     isRepayment: integer("is_repayment", { mode: "boolean" }).notNull().default(false),
     // Von Hand als beglichen markiert
     settledAt: text("settled_at"),
+    // Bank-Import: Hash der Buchung (Doppelte werden übersprungen), Verbuchungszeit, Währung des Originals
+    hash: text("hash"),
+    bookedAt: text("booked_at"),
+    currency: text("currency").notNull().default("CHF"),
+    // Eigene Überweisung zwischen Konten oder Anlage: zählt nicht als Ausgabe
+    internal: integer("internal", { mode: "boolean" }).notNull().default(false),
+    // Von Hand (oder per Regel) festgelegt: Mahlzeit ja/nein. null = entscheidet die Schwelle.
+    mealOverride: integer("meal_override", { mode: "boolean" }),
     ...timestamps,
   },
-  (t) => [index("transactions_date_idx").on(t.date), index("transactions_account_idx").on(t.accountId), index("transactions_category_idx").on(t.categoryId)],
+  (t) => [uniqueIndex("transactions_hash_uq").on(t.hash), index("transactions_date_idx").on(t.date), index("transactions_account_idx").on(t.accountId), index("transactions_category_idx").on(t.categoryId)],
 );
 
 /* ---------- Körper ---------- */
@@ -294,4 +304,17 @@ export const investmentEntries = sqliteTable(
     ...timestamps,
   },
   (t) => [index("investment_entries_date_idx").on(t.date), check("investment_entries_kind_chk", sql`${t.kind} in ('value','deposit')`)],
+);
+
+/* ---------- Gelernte Kategorie-Regeln ---------- */
+export const categoryRules = sqliteTable(
+  "category_rules",
+  {
+    id: text("id").primaryKey(),
+    pattern: text("pattern").notNull(),
+    category: text("category").notNull(),
+    wholeWord: integer("whole_word", { mode: "boolean" }).notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("category_rules_pattern_uq").on(t.pattern)],
 );

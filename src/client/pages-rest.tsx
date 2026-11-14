@@ -12,6 +12,7 @@ import { GymCard } from "./cards";
 import { useMonthMoney, useLatest } from "./lib";
 import { useAccounts, useAllTransactions, useCategories, useExams, useGymPlans, useNow, useSetSetting, useSettings, useTasks, useToday, useTransactions } from "./queries";
 import { notify } from "./toast";
+import { UploadAction } from "./import";
 
 const TOP = (t: string) => <div className="top"><span className="d" style={{ fontSize: 28, fontWeight: 700, color: "var(--fg)", letterSpacing: "-.03em" }}>{t}</span></div>;
 const dayList = (s: string) => (s ? s.split(",").map(Number) : []);
@@ -47,6 +48,7 @@ export function Geld() {
         </div>
       </div>
       <div className="acts">
+        <UploadAction />
         <RoundAction icon="chart" label="Analyse" href="/analyse" />
         <RoundAction icon="coin" label="Depot" onClick={() => sheet.open(<DepotSheet />)} />
         <RoundAction icon="fork" label="Mama" onClick={() => sheet.open(<MamaSheet />)} />
