@@ -391,3 +391,34 @@ describe("Schutz", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("ChatGPT", () => {
+  const CHATGPT_REDIRECT = "https://chatgpt.com/connector_platform_oauth_redirect";
+
+  it("Ablauf mit der festen ChatGPT-Redirect-URI", async () => {
+    const clientId = await register([CHATGPT_REDIRECT], "ChatGPT");
+    const { verifier, challenge } = await pkce();
+    const c = await openConsent({ clientId, redirectUri: CHATGPT_REDIRECT, scope: "tasks", challenge });
+    expect(c.res.status).toBe(200);
+    expect(c.html).toContain("chatgpt.com");
+    const r = await submitConsent(c.handle, c.cookie, "approve", ["tasks"]);
+    const loc = new URL(r.headers.get("location")!);
+    expect(loc.origin + loc.pathname).toBe(CHATGPT_REDIRECT);
+    expect(loc.searchParams.get("iss")).toBe(ORIGIN);
+    const t = await tokenRequest({ grant_type: "authorization_code", code: loc.searchParams.get("code")!, redirect_uri: CHATGPT_REDIRECT, client_id: clientId, code_verifier: verifier, resource: RESOURCE });
+    expect(t.status).toBe(200);
+  });
+
+  it("auch Fehlerantworten tragen iss (RFC 9207)", async () => {
+    const clientId = await register([CHATGPT_REDIRECT], "ChatGPT");
+    const none = await openConsent({ clientId, redirectUri: CHATGPT_REDIRECT, challenge: null });
+    expect(none.res.status).toBe(302);
+    const loc = new URL(none.res.headers.get("location")!);
+    expect(loc.searchParams.get("error")).toBe("invalid_request");
+    expect(loc.searchParams.get("iss")).toBe(ORIGIN);
+    const { challenge } = await pkce();
+    const c = await openConsent({ clientId, redirectUri: CHATGPT_REDIRECT, challenge });
+    const d = new URL((await submitConsent(c.handle, c.cookie, "deny", [])).headers.get("location")!);
+    expect(d.searchParams.get("iss")).toBe(ORIGIN);
+  });
+});

@@ -38,6 +38,8 @@
     "MCP_ORIGIN": "https://dashboard.hahntim518.workers.dev"
     // OWNER_EMAIL wird als Secret gesetzt: wrangler secret put OWNER_EMAIL
   },
+  // Erinnerungen und Kalender-Abgleich (src/server/cron.ts).
+  "triggers": { "crons": ["*/5 * * * *"] },
   "workers_dev": true,
   "preview_urls": false,
   "observability": { "enabled": true }

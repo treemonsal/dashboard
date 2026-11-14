@@ -1,0 +1,11 @@
+# Auftrag: Gesundheitsdaten von Fitbit / Google Health
+
+Dein Bereich: src/server/health/** (neu), test/health/** (neu), src/client/fitbit.tsx (neu), docs/fitbit.md (neu). In routes.ts, cron.ts und der Einstellungsseite nur die nötigen Einhängepunkte (wenige Zeilen). Tabu: src/server/mcp/**.
+
+Der Besitzer trägt ein Fitbit Air, seine Daten liegen bei Google (Fitbit-Konto über Google). Ziel: jede Nacht Schlaf, Schritte, Ruhepuls, Gewicht und Trainings automatisch in die Tabelle health_daily.
+
+1. Recherchiere zuerst den aktuellen Stand (Web, offizielle Doku, nicht Vorwissen): Welche Schnittstelle liefert heute Fitbit-Daten für ein privates Konto: die Fitbit Web API (dev.fitbit.com, Anwendungstyp "Personal") oder die neue Google Health API? Welche wird abgeschaltet und wann? Was muss ein Privatnutzer anlegen, was kostet es, welche Rechte und Redirect-Adressen braucht es, wie lange leben Tokens? Halte die Antwort mit Quellen in docs/fitbit.md fest und entscheide dich für den Weg, der für einen Einsteiger am wenigsten Klicks braucht und nicht bald abgeschaltet wird. Wenn beide Wege sinnvoll sind: baue den Client so, dass der Anbieter austauschbar ist.
+2. Baue: OAuth-Verbindung (Authorization Code mit PKCE, Start und Rückkehr hinter Cloudflare Access, state prüfen), Client-ID und Secret als Worker-Secrets (nie im Code), Tokens verschlüsselt in D1 oder KV (Schlüssel als Secret), automatische Erneuerung, `syncHealth(env)` für den Cron (einmal pro Nacht plus Knopf "Jetzt abgleichen"), Nachladen der letzten 30 Tage beim ersten Verbinden, sync_runs schreiben, Fehler ehrlich melden, Verbindung trennen. Falls eine neue Tabelle nötig ist: Migration mit Drizzle, auch remote anwenden.
+3. Oberfläche (src/client/fitbit.tsx, eingehängt in Einstellungen und im Leerzustand des Körper-Tabs): "Fitbit verbinden", Status, zuletzt abgeglichen, trennen.
+4. Tests mit nachgestellten Antworten der Schnittstelle: Zuordnung der Felder, Zeitzone Europe/Zurich (Schlaf zählt zum Aufwachtag), Token-Erneuerung, Fehlerfälle, kein Token in Logs oder Antworten.
+5. docs/fitbit.md: Klickanleitung für den Besitzer (Einsteiger, Deutsch, per Du): was er einmalig anlegen muss, welche Werte er wo einträgt (als Secret über mich, nicht im Chat), und was er dann in der App antippt. Kennzeichne ehrlich, was du nicht selber durchspielen konntest.
