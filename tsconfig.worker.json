@@ -5,5 +5,6 @@
     "types": ["@cloudflare/vitest-plugin/types"],
     "tsBuildInfoFile": "node_modules/.tmp/worker.tsbuildinfo"
   },
-  "include": ["src/server", "src/shared", "test"]
+  "include": ["src/server", "src/shared", "test"],
+  "exclude": ["test/client"]
 }

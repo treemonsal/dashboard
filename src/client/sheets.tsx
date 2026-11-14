@@ -1,4 +1,5 @@
 // Inhalte der Blätter (zweite Ebene).
+import { QueryNotice, SaveNotice } from "./query-state";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { addDays, dayCompact, daysUntil, inDays, todayInZone, weekdayNum, WEEKDAY_LETTERS, WEEK_ORDER } from "../shared/dates";
 import { neededGrade, subjectMarks } from "../shared/calc";
@@ -116,7 +117,8 @@ function RepeatField({ rule, dueDate, onChange }: { rule: string | null; dueDate
 export function TaskSheet({ id }: { id: string }) {
   const sheet = useSheet();
   const today = useToday();
-  const tasks = useTasks().data ?? [];
+  const taskQuery = useTasks();
+  const tasks = taskQuery.data ?? [];
   const t = tasks.find((x) => x.id === id);
   const projects = useProjects().data ?? [];
   const upd = useUpdateTask();
@@ -125,9 +127,9 @@ export function TaskSheet({ id }: { id: string }) {
   const toggle = useToggleTask();
   const [sub, setSub] = useState("");
   useEffect(() => {
-    if (!t && tasks.length) sheet.close();
-  }, [t, tasks.length, sheet]);
-  if (!t) return <div style={{ minHeight: 120 }} />;
+    if (!t && taskQuery.isSuccess && !del.isPending) sheet.close();
+  }, [t, taskQuery.isSuccess, del.isPending, sheet]);
+  if (!t) return <QueryNotice pending={taskQuery.isPending || del.isPending} error={taskQuery.error ?? del.error} />;
   const set = (patch: Parameters<typeof upd.mutate>[0]["patch"]) => upd.mutate({ id, patch });
   const subs = tasks.filter((x) => x.parentId === id).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const done = !!t.doneAt;
@@ -180,9 +182,8 @@ export function TaskSheet({ id }: { id: string }) {
       <form className="field" style={{ borderTop: subs.length ? "1px solid var(--line)" : 0 }} onSubmit={(e) => {
         e.preventDefault();
         const v = sub.trim();
-        if (!v) return;
-        create.mutate({ id: uid(), title: v, parentId: id });
-        setSub("");
+        if (!v || create.isPending) return;
+        create.mutate({ id: uid(), title: v, parentId: id }, { onSuccess: () => setSub((current) => current === sub ? "" : current) });
       }}>
         <input className="inp grow" style={{ textAlign: "left", maxWidth: "100%" }} placeholder="Unteraufgabe hinzufügen" value={sub} onChange={(e) => setSub(e.target.value)} maxLength={500} />
       </form>
@@ -190,13 +191,14 @@ export function TaskSheet({ id }: { id: string }) {
         <button type="button" className="cta ghost press" style={{ marginTop: 0 }} onClick={() => set({ dueDate: addDays(todayInZone(), 1) })}>
           Auf morgen
         </button>
-        <button type="button" className="cta press" style={{ marginTop: 0 }} onClick={() => { toggle.mutate(id, !done); if (!done) sheet.close(); }}>
+        <button type="button" className="cta press" style={{ marginTop: 0 }} disabled={toggle.isPending} onClick={() => toggle.mutate(id, !done, { onSuccess: () => { if (!done) sheet.close(); } })}>
           {done ? "Wieder öffnen" : "Erledigen"}
         </button>
       </div>
       <div style={{ marginTop: 10 }}>
-        <ConfirmDelete onConfirm={() => { del.mutate(id); sheet.close(); }} />
+        <ConfirmDelete onConfirm={() => { if (!del.isPending) del.mutate(id, { onSuccess: sheet.close }); }} />
       </div>
+      <SaveNotice error={create.error ?? upd.error ?? del.error ?? toggle.error} />
       <span hidden>{today}</span>
     </div>
   );
@@ -218,8 +220,9 @@ export function TagSheet() {
   return (
     <div>
       <h3>Heute</h3>
-      <div className="when">{d.done} von {d.total} erledigt</div>
-      {d.total === 0 && <div className="empty">Nichts geplant.</div>}
+      <QueryNotice pending={d.loading} error={d.error} />
+      {!d.loading && !d.error && <div className="when">{d.done} von {d.total} erledigt</div>}
+      {d.total === 0 && !d.loading && !d.error && <div className="empty">Nichts geplant.</div>}
       {open.map((t) => (<TaskLine key={t.id} task={t} today={d.today} />))}
       {tr && !tr.done && trRow}
       {(done.length > 0 || tr?.done) && <div className="sec">Erledigt</div>}
@@ -265,7 +268,7 @@ export function TrainingSheet({ day }: { day: string }) {
       start.mutate();
     }
   }, [data, isToday, start]);
-  if (!data) return <div style={{ minHeight: 160 }} />;
+  if (!data) return <QueryNotice pending={q.isPending} error={q.error} />;
   const s = data.session;
   const plan = data.plan;
   const groups: { name: string; sets: GymSet[] }[] = [];
@@ -280,6 +283,7 @@ export function TrainingSheet({ day }: { day: string }) {
   return (
     <div>
       <h3>{title}</h3>
+      <SaveNotice error={start.error ?? fin.error ?? rem.error} />
       {when && <div className="when">{when}</div>}
       <FitbitHinweis day={day} />
       {!s && !plan && (
@@ -315,7 +319,7 @@ export function TrainingSheet({ day }: { day: string }) {
           {finished ? "Abgeschlossen" : "Training abschliessen"}
         </button>
       )}
-      {s && !isToday && <div style={{ marginTop: 10 }}><ConfirmDelete label="Eintrag entfernen" onConfirm={() => { rem.mutate(); sheet.close(); }} /></div>}
+      {s && !isToday && <div style={{ marginTop: 10 }}><ConfirmDelete label="Eintrag entfernen" onConfirm={() => { if (!rem.isPending) rem.mutate(undefined, { onSuccess: sheet.close }); }} /></div>}
     </div>
   );
 }
@@ -323,8 +327,15 @@ export function TrainingSheet({ day }: { day: string }) {
 /* ---------- Plan bearbeiten ---------- */
 interface Draft { id: string; name: string; sets: string; reps: string; weight: string }
 export function PlanSheet({ id }: { id: string | null }) {
+  const q = useGymPlans();
+  if (id && !q.data) return <QueryNotice pending={q.isPending} error={q.error} />;
+  return <PlanEditor id={id} />;
+}
+
+function PlanEditor({ id }: { id: string | null }) {
   const sheet = useSheet();
-  const plans = useGymPlans().data ?? [];
+  const plansQuery = useGymPlans();
+  const plans = plansQuery.data ?? [];
   const existing = id ? plans.find((p) => p.id === id) : undefined;
   const save = useSavePlan();
   const del = useDeletePlan();
@@ -334,7 +345,7 @@ export function PlanSheet({ id }: { id: string | null }) {
   const valid = name.trim().length > 0;
   const upd = (i: number, k: keyof Draft, v: string) => setEx((l) => l.map((e, j) => (j === i ? { ...e, [k]: v } : e)));
   const submit = () => {
-    if (!valid) return;
+    if (!valid || save.isPending) return;
     const plan = {
       name: name.trim(),
       weekdays: days,
@@ -346,12 +357,12 @@ export function PlanSheet({ id }: { id: string | null }) {
         weight: e.weight.trim() === "" ? null : num(e.weight),
       })),
     };
-    save.mutate({ id: existing?.id, plan: existing ? plan : { ...plan, id: uid() } });
-    sheet.close();
+    save.mutate({ id: existing?.id, plan: existing ? plan : { ...plan, id: uid() } }, { onSuccess: sheet.close });
   };
   return (
     <div>
       <h3>{existing ? "Plan" : "Neuer Plan"}</h3>
+      <SaveNotice error={save.error ?? del.error} />
       <div className="field" style={{ borderTop: 0 }}>
         <input className="inp grow" style={{ textAlign: "left", maxWidth: "100%" }} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} aria-label="Name" />
       </div>
@@ -381,8 +392,8 @@ export function PlanSheet({ id }: { id: string | null }) {
           <Icon n="plus" className="" /> Übung
         </button>
       )}
-      <button type="button" className="cta press" disabled={!valid} onClick={submit}>Speichern</button>
-      {existing && <div style={{ marginTop: 10 }}><ConfirmDelete label="Plan löschen" onConfirm={() => { del.mutate(existing.id); sheet.close(); }} /></div>}
+      <button type="button" className="cta press" disabled={!valid || save.isPending} onClick={submit}>Speichern</button>
+      {existing && <div style={{ marginTop: 10 }}><ConfirmDelete label="Plan löschen" onConfirm={() => { if (!del.isPending) del.mutate(existing.id, { onSuccess: sheet.close }); }} /></div>}
     </div>
   );
 }
@@ -400,10 +411,11 @@ export function ExamSheet({ id }: { id: string }) {
   const set = useSetAssessment(id);
   const add = useAddTopic(id);
   const plan = usePlanStudy(id);
-  const tasks = useTasks().data ?? [];
+  const taskQuery = useTasks();
+  const tasks = taskQuery.data ?? [];
   const [topic, setTopic] = useState("");
   const e = q.data;
-  if (!e) return <div style={{ minHeight: 200 }} />;
+  if (!e) return <QueryNotice pending={q.isPending} error={q.error} />;
   const planned = tasks.filter((t) => t.examId === id && !t.doneAt).length;
   const n = e.topics.filter((t) => t.assessment === 2).length;
   const u = e.topics.filter((t) => t.assessment === 1).length;
@@ -412,6 +424,7 @@ export function ExamSheet({ id }: { id: string }) {
   return (
     <div>
       <h3>{e.subjectCode}: {e.title}</h3>
+      <SaveNotice error={add.error ?? plan.error ?? set.error} />
       <p className="when">
         {when} · {inDays(days)}
         {e.hint && <><br /><span className="warn">{e.hint}</span></>}
@@ -433,14 +446,13 @@ export function ExamSheet({ id }: { id: string }) {
       <form className="field" style={{ borderTop: "1px solid var(--line)" }} onSubmit={(ev) => {
         ev.preventDefault();
         const v = topic.trim();
-        if (!v) return;
-        add.mutate({ id: uid(), title: v });
-        setTopic("");
+        if (!v || add.isPending) return;
+        add.mutate({ id: uid(), title: v }, { onSuccess: () => setTopic((current) => current === topic ? "" : current) });
       }}>
         <input className="inp grow" style={{ textAlign: "left", maxWidth: "100%" }} placeholder="Thema hinzufügen" value={topic} onChange={(ev) => setTopic(ev.target.value)} maxLength={300} />
       </form>
-      <button type="button" className={`cta press ${plan.isPending ? "ghost" : ""}`} disabled={n === e.topics.length || days < 1} onClick={() => plan.mutate(planned > 0)}>
-        {plan.isPending ? "Eingeplant" : planned > 0 ? `Neu einplanen · ${planned} Blöcke` : "Lernblöcke einplanen"}
+      <button type="button" className={`cta press ${plan.isPending ? "ghost" : ""}`} disabled={n === e.topics.length || days < 1 || plan.isPending || taskQuery.isPending || !!taskQuery.error} onClick={() => plan.mutate(planned > 0)}>
+        {plan.isPending ? "Wird eingeplant" : planned > 0 ? `Neu einplanen · ${planned} Blöcke` : "Lernblöcke einplanen"}
       </button>
     </div>
   );
@@ -448,8 +460,10 @@ export function ExamSheet({ id }: { id: string }) {
 
 /* ---------- Fach ---------- */
 export function SubjectSheet({ id }: { id: string }) {
-  const subjects = useSubjects().data ?? [];
-  const grades = useGrades().data ?? [];
+  const subjectsQuery = useSubjects();
+  const gradesQuery = useGrades();
+  const subjects = subjectsQuery.data ?? [];
+  const grades = gradesQuery.data ?? [];
   const add = useAddGrade();
   const del = useDeleteGrade();
   const setCounts = useSetSubjectCounts();
@@ -461,7 +475,7 @@ export function SubjectSheet({ id }: { id: string }) {
   const [title, setTitle] = useState("");
   const [target, setTarget] = useState("4.5");
   const [rw, setRw] = useState("1");
-  if (!row) return <div style={{ minHeight: 160 }} />;
+  if (!row || gradesQuery.isPending || gradesQuery.error) return <QueryNotice pending={subjectsQuery.isPending || gradesQuery.isPending} error={subjectsQuery.error ?? gradesQuery.error} />;
   const v = num(value);
   const w = num(weight);
   const valid = v !== null && v >= 1 && v <= 6 && w !== null && w > 0 && !!date;
@@ -473,6 +487,7 @@ export function SubjectSheet({ id }: { id: string }) {
   return (
     <div>
       <h3>{row.subject.code}</h3>
+      <SaveNotice error={add.error ?? del.error ?? setCounts.error} />
       <div className="yh" style={{ paddingTop: 4 }}>
         <b className={counts ? (avg !== null && avg < 4 ? "bad" : "") : "faint"}>{avg === null ? "–" : nf(avg, 2)}</b>
         <span>Schnitt</span>
@@ -494,9 +509,8 @@ export function SubjectSheet({ id }: { id: string }) {
       <div className="field"><label htmlFor="g-w">Gewicht</label><input id="g-w" className="inp num" inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} /></div>
       <div className="field"><label htmlFor="g-d">Datum</label><input id="g-d" className="inp" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
       <div className="field"><label htmlFor="g-t">Bezeichnung</label><input id="g-t" className="inp" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300} /></div>
-      <button type="button" className="cta press" disabled={!valid} onClick={() => {
-        add.mutate({ id: uid(), subjectId: id, value: Math.round(v! * 100) / 100, weight: w!, date, title: title.trim() || null });
-        setValue(""); setTitle("");
+      <button type="button" className="cta press" disabled={!valid || add.isPending} onClick={() => {
+        add.mutate({ id: uid(), subjectId: id, value: Math.round(v! * 100) / 100, weight: w!, date, title: title.trim() || null }, { onSuccess: () => { setValue((current) => current === value ? "" : current); setTitle((current) => current === title ? "" : current); } });
       }}>Hinzufügen</button>
       {counts && <>
       <div className="sec">Welche Note brauche ich?</div>

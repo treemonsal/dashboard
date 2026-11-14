@@ -195,3 +195,58 @@ export function depotConfig(s: { investSymbol: string; investShares: string; inv
   const cur = s.investCurrency === "CHF" || s.investCurrency === "EUR" ? s.investCurrency : "USD";
   return { symbol: s.investSymbol.trim().toUpperCase(), shares: Number(s.investShares) || 0, currency: cur };
 }
+
+export interface PortfolioProduct {
+  symbol: string;
+  name: string;
+  isin: string;
+  index: string;
+  currency: "EUR";
+}
+/** Bewertungsnotierung: Tradegate EUR, unabhängig vom ursprünglichen Kaufplatz. */
+export const PORTFOLIO_PRODUCTS: PortfolioProduct[] = [
+  { symbol: "VUAA", name: "Vanguard S&P 500", isin: "IE00BFMXXD54", index: "S&P 500", currency: "EUR" },
+  { symbol: "XNAS", name: "Xtrackers Nasdaq 100", isin: "IE00BMFKG444", index: "Nasdaq 100", currency: "EUR" },
+  { symbol: "NVDA", name: "NVIDIA", isin: "US67066G1040", index: "Einzelaktie", currency: "EUR" },
+];
+export const CONFIRMED_HOLDINGS = [{ symbol: "VUAA", shares: 12.2 }, { symbol: "XNAS", shares: 23 }, { symbol: "NVDA", shares: 3 }];
+export const portfolioProduct = (symbol: string): PortfolioProduct | null => PORTFOLIO_PRODUCTS.find(p => p.symbol === symbol) ?? null;
+export interface PortfolioHolding extends DepotConfig { exchange: "TRADEGATE" | "US" }
+export function depotHoldings(s: { investSymbol: string; investShares: string; investCurrency: string; investHoldings?: string }): PortfolioHolding[] | null {
+  if (!s.investHoldings?.trim()) {
+    if (s.investSymbol.trim()) return [{ ...depotConfig(s), exchange: "US" }];
+    return CONFIRMED_HOLDINGS.map(h => ({ ...h, currency: "EUR", exchange: "TRADEGATE" }));
+  }
+  try {
+    const rows: unknown = JSON.parse(s.investHoldings);
+    if (!Array.isArray(rows) || rows.length > 20) return null;
+    const result: PortfolioHolding[] = [];
+    const seen = new Set<string>();
+    for (const row of rows) {
+      if (!row || typeof row !== "object" || !portfolioProduct(row.symbol) || typeof row.shares !== "number" || !Number.isFinite(row.shares) || row.shares <= 0 || seen.has(row.symbol)) return null;
+      seen.add(row.symbol);
+      result.push({ symbol: row.symbol, shares: row.shares, currency: "EUR", exchange: "TRADEGATE" });
+    }
+    return result;
+  } catch { return null; }
+}
+
+/** Nur vollständige, gleich datierte Kurse ergeben einen Gesamtwert. Keine Teilwerte, kein Proxy. */
+export function planPortfolioValues(o: { entries: DepotEntry[]; today: string; positions: { config: DepotConfig; held: Close[]; fx: Close[] | null }[] }): NewValue[] {
+  const base = o.entries.filter(e => e.kind === "value" && isHand(e)).sort(byDate).at(-1);
+  if (!base || !o.positions.length || o.positions.some(p => !p.held.length || !(p.config.shares > 0))) return [];
+  const dates = [...new Set(o.positions[0]!.held.map(c => c.date))].filter(d => d > base.date && d <= o.today).sort();
+  const out: NewValue[] = [];
+  for (const date of dates) {
+    let amount = 0;
+    let complete = true;
+    for (const p of o.positions) {
+      const close = p.held.find(c => c.date === date)?.close;
+      const fx = p.config.currency === "CHF" ? 1 : onOrBefore(p.fx ?? [], date)?.close;
+      if (!close || !Number.isFinite(close) || close <= 0 || !fx || !Number.isFinite(fx) || fx <= 0) { complete = false; break; }
+      amount += p.config.shares * close * fx;
+    }
+    if (complete && Number.isFinite(amount)) out.push({ date, amount: r2(amount), estimated: false });
+  }
+  return out;
+}

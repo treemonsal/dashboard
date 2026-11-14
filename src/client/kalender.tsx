@@ -1,4 +1,5 @@
 // Kalender-Termine (nur lesen) in Tagesplan und Woche, dazu das Blatt für einen Termin.
+import { QueryNotice } from "./query-state";
 import { Fragment, useState, type ReactNode } from "react";
 import { addDays, clockOf, dayCompact, minutesOf, mondayOf, weekdayNum } from "../shared/dates";
 import { eventsOnDay, lastDayOf, type DayEvent } from "../shared/agenda";
@@ -156,15 +157,20 @@ export function Woche() {
   const [offset, setOffset] = useState(0);
   const from = addDays(mondayOf(today), offset * 7);
   const days = Array.from({ length: 7 }, (_, i) => addDays(from, i));
-  const tasks = useTasks().data ?? [];
-  const exams = useExams().data ?? [];
-  const plans = useGymPlans().data ?? [];
+  const tasksQuery = useTasks();
+  const tasks = tasksQuery.data ?? [];
+  const examsQuery = useExams();
+  const exams = examsQuery.data ?? [];
+  const plansQuery = useGymPlans();
+  const plans = plansQuery.data ?? [];
   const gym = useGymDays(16);
   const ev = useEvents(from, addDays(from, 6));
   const sheet = useSheet();
   const suggest = useSuggest();
   const tt = useTimetable();
 
+  const loading = tasksQuery.isPending || examsQuery.isPending || plansQuery.isPending || gym.loading || ev.loading || tt.loading;
+  const error = tasksQuery.error ?? examsQuery.error ?? plansQuery.error ?? gym.error ?? ev.error ?? tt.error;
   return (
     <div className="view">
       <DetailHead title="Woche" back="/" />
@@ -180,6 +186,7 @@ export function Woche() {
           <Icon n="chev" />
         </button>
       </div>
+      <QueryNotice pending={loading} error={error} />
       {days.map((day) => {
         const isToday = day === today;
         const dayTasks = tasks.filter((t) => !t.parentId && t.dueDate !== null && (isToday ? t.dueDate <= day && (!t.doneAt || t.dueDate === day || t.doneAt.slice(0, 10) >= day) : t.dueDate === day));
@@ -187,7 +194,7 @@ export function Woche() {
         const trainingDone = gym.done.has(day);
         const dayExams = exams.filter((x) => x.date === day);
         const items = dayItems({ day, tasks: dayTasks, events: ev.events, exams: dayExams, lessons: tt.on(day), suggest: suggest(day, dayTasks, ev.events, today) });
-        const missed = !!plan && !trainingDone && day < today;
+        const missed = gym.loaded && !!plan && !trainingDone && day < today;
         const training = (plan || trainingDone) && (
           <button type="button" className={`slot press ${trainingDone ? "done" : ""} ${missed ? "missed" : ""}`} onClick={() => sheet.open(<TrainingSheet day={day} />)}>
             <span className="t" />
@@ -208,7 +215,7 @@ export function Woche() {
               <span className="wkd">{dayCompact(day)}</span>
               {isToday && <span>heute</span>}
             </h2>
-            {empty ? (
+            {empty && (loading || error) ? null : empty ? (
               <div className="wkempty">–</div>
             ) : (
               <div className="tl">

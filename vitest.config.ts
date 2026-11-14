@@ -16,6 +16,7 @@ export default defineConfig(async () => {
         },
       }),
     ],
-    test: { setupFiles: ["./test/apply-migrations.ts"] },
+    // Begrenzte Workerzahl: der Kalender Geschwindigkeitstest darf nicht mit 26 Isolaten um CPU konkurrieren.
+    test: { maxWorkers: 2, exclude: ["test/client/**", "node_modules/**"], setupFiles: ["./test/apply-migrations.ts"] },
   };
 });

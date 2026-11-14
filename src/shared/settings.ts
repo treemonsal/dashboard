@@ -8,7 +8,7 @@ export type Settings = {
   gymGoal: string;
   /** Monatslohn in CHF */
   salary: string;
-  /** Fixe Einzahlung pro Monat in den S&P 500 */
+  /** Fixe Einzahlung pro Monat ins Portfolio */
   investMonthly: string;
   /** Veraltet, wird nicht mehr gerechnet (der Startbestand ist der erste Depotwert). */
   investStart: string;
@@ -18,6 +18,8 @@ export type Settings = {
   investSymbol: string;
   investShares: string;
   investCurrency: string;
+  /** Mehrere bestätigte Positionen, JSON. Leer erhält die bisherige Einzelposition. */
+  investHoldings: string;
   /** Wer die Hälfte der Mahlzeiten auswärts zurückzahlt (leer, bis eingetragen) */
   mamaName: string;
   /** "1" = Einträge, die mit "Hausaufgabe" beginnen, im Kalender ausblenden */
@@ -27,5 +29,5 @@ export type Settings = {
   /** Trainings im Körper-Tab: "sport" (ohne Gehen) oder "alle" */
   workoutView: string;
 };
-export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "4", salary: "650", investMonthly: "350", investStart: "", investDay: "25", investSymbol: "", investShares: "", investCurrency: "USD", mamaName: "", hideHomework: "1", schoolHolidayUntil: "", workoutView: "sport" };
+export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "4", salary: "650", investMonthly: "350", investStart: "", investDay: "25", investSymbol: "", investShares: "", investCurrency: "USD", investHoldings: "", mamaName: "", hideHomework: "1", schoolHolidayUntil: "", workoutView: "sport" };
 

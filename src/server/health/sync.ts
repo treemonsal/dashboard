@@ -1,5 +1,5 @@
 // Abgleich mit dem Anbieter: Token bereithalten, Zeitraum lesen, in health_daily und health_workouts schreiben, sync_runs festhalten.
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
 import { addDays, todayInZone } from "../../shared/dates";
@@ -28,7 +28,7 @@ export interface HealthSyncDeps {
   fetcher?: typeof fetch;
   now?: Date;
   provider?: HealthProvider;
-  /** Anzahl Tage; sonst 30 beim ersten Mal, danach 3. */
+  /** Manueller Bereich; sonst erster Import oder lückenloser Folgeabgleich. */
   days?: number;
 }
 export interface HealthSyncResult {
@@ -64,6 +64,7 @@ export async function saveConnection(db: Db, env: HealthEnv, provider: HealthPro
     scope: t.scope,
     connectedAt: nowIso(),
     lastError: null,
+    syncThrough: null,
     updatedAt: nowIso(),
   };
   await db.insert(healthConnection).values(row).onConflictDoUpdate({ target: healthConnection.id, set: row });
@@ -109,8 +110,8 @@ async function write(db: Db, days: DayValues[], workouts: Workout[]): Promise<vo
   for (let i = 0; i < stmts.length; i += BATCH) await db.batch(stmts.slice(i, i + BATCH) as never);
 }
 
-async function record(db: Db, ok: boolean, message: string): Promise<void> {
-  await db.insert(syncRuns).values({ id: newId(), kind: KIND, ok, message: short(message) });
+async function record(db: Db, ok: boolean, message: string, at: Date): Promise<void> {
+  await db.insert(syncRuns).values({ id: newId(), kind: KIND, ok, message: short(message), at: at.toISOString() });
 }
 
 export async function syncHealth(rawEnv: HealthEnv, deps: HealthSyncDeps = {}): Promise<HealthSyncResult> {
@@ -120,21 +121,36 @@ export async function syncHealth(rawEnv: HealthEnv, deps: HealthSyncDeps = {}): 
   const db: Db = drizzle(rawEnv.DB, { schema });
   const env = await withCredentials(rawEnv, db);
 
-  const conn = await db.select({ id: healthConnection.id }).from(healthConnection).where(eq(healthConnection.id, provider.id)).get();
+  const conn = await db.select().from(healthConnection).where(eq(healthConnection.id, provider.id)).get();
   if (!conn) return { ok: false, message: "Nicht verbunden", days: 0, workouts: 0, connected: false };
   const fail = async (message: string): Promise<HealthSyncResult> => {
     await db.update(healthConnection).set({ lastError: short(message), updatedAt: nowIso() }).where(eq(healthConnection.id, provider.id));
-    await record(db, false, message);
+    await record(db, false, message, now);
     return { ok: false, message, days: 0, workouts: 0, connected: true };
   };
   if (!provider.configured(env)) return fail("Zugangsdaten sind auf dem Server nicht eingetragen");
 
   try {
-    const everOk = await db.select({ id: syncRuns.id }).from(syncRuns).where(and(eq(syncRuns.kind, KIND), eq(syncRuns.ok, true))).limit(1).get();
-    const n = deps.days ?? (everOk ? NIGHTLY_DAYS : FIRST_DAYS);
+    const lastOk = await db.select({ at: syncRuns.at }).from(syncRuns)
+      .where(and(eq(syncRuns.kind, KIND), eq(syncRuns.ok, true))).orderBy(desc(syncRuns.at)).limit(1).get();
     const today = todayInZone(now);
-    const from = addDays(today, -(n - 1));
-    const to = addDays(today, 1);
+    const regularFrom = addDays(today, -(NIGHTLY_DAYS - 1));
+    // Bestehende Installationen starten spätestens am Tag vor dem letzten Erfolg.
+    // Ein erfolgreicher Teilbereich hinterlegt sein exklusives Ende, damit ein
+    // längerer Rückstand nach mehreren Aufrufen ohne Lücken aufgeholt wird.
+    const checkpoint = conn.syncThrough ?? (lastOk ? addDays(todayInZone(new Date(lastOk.at)), -1) : null);
+    if (!conn.syncThrough) {
+      // Bereits vor dem Lesen verankern: auch ein erster Teilfehler oder ein
+      // manueller Kurzabgleich darf den Anfang beim nächsten Lauf nicht verschieben.
+      await db.update(healthConnection).set({ syncThrough: checkpoint ?? addDays(today, -(FIRST_DAYS - 1)) })
+        .where(and(eq(healthConnection.id, provider.id), isNull(healthConnection.syncThrough)));
+    }
+    const from = deps.days !== undefined ? addDays(today, -(deps.days - 1))
+      : checkpoint ? (checkpoint < regularFrom ? checkpoint : regularFrom)
+      : addDays(today, -(FIRST_DAYS - 1));
+    const end = addDays(today, 1);
+    // Pro Lauf höchstens 30 Tage: begrenzte API-Abfragen auch nach langer Pause.
+    const to = addDays(from, FIRST_DAYS) < end ? addDays(from, FIRST_DAYS) : end;
 
     let token = await freshAccess(db, env, provider, f, now, false);
     let res;
@@ -151,8 +167,13 @@ export async function syncHealth(rawEnv: HealthEnv, deps: HealthSyncDeps = {}): 
     const written = res.days.length;
     const base = `${written} ${written === 1 ? "Tag" : "Tage"}, ${res.workouts.length} ${res.workouts.length === 1 ? "Training" : "Trainings"}`;
     const message = ok ? base : `${base}. ${res.problems.join("; ")}`;
-    await db.update(healthConnection).set({ lastError: ok ? null : short(message), updatedAt: nowIso() }).where(eq(healthConnection.id, provider.id));
-    await record(db, ok, message);
+    await db.update(healthConnection).set({
+      lastError: ok ? null : short(message), updatedAt: nowIso(),
+      // Teilfehler dürfen den Cursor nicht fortschreiben. Ein manueller kurzer
+      // Zeitraum darf einen bestehenden Rückstand ebenfalls nicht überspringen.
+      ...(ok && deps.days === undefined ? { syncThrough: to } : {}),
+    }).where(eq(healthConnection.id, provider.id));
+    await record(db, ok, message, now);
     return { ok, message, days: written, workouts: res.workouts.length, connected: true };
   } catch (e) {
     const message = e instanceof HealthError ? e.message : "Unerwarteter Fehler beim Abgleich";

@@ -45,6 +45,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     headers: body === undefined ? undefined : { "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  if ((res.headers.get("content-type") ?? "").includes("text/html")) {
+    throw new ApiError(401, "Bitte erneut anmelden.");
+  }
   if (!res.ok) {
     let msg = `Fehler ${res.status}`;
     try {

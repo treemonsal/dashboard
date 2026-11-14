@@ -31,7 +31,7 @@ export const gesamt = (rows: { avg: number | null; counts: boolean }[]) => count
 
 export const examTone = (date: string) => (daysUntil(date) < 15 ? "soon" : "");
 
-import { useSettings, useTransactions, useToday as useTodayQ, useHealth } from "./queries";
+import { useSettings, useSettingsQuery, useTransactions, useToday as useTodayQ, useHealth } from "./queries";
 import { budgetOf, monthSummary } from "../shared/geld";
 
 /** Übrig im laufenden Monat: Budget (Lohn minus Einzahlung) minus eigener Anteil der Ausgaben. */
@@ -40,12 +40,13 @@ export function useMonthMoney() {
   const month = today.slice(0, 7);
   const q = useTransactions(month);
   const s = useSettings();
+  const settings = useSettingsQuery();
   const budget = budgetOf(s.salary, s.investMonthly);
-  return { month, txs: q.data ?? [], loaded: !q.isPending, budget, summary: monthSummary(q.data ?? [], budget) };
+  return { month, txs: q.data ?? [], loaded: q.isSuccess && settings.isSuccess, loading: q.isPending || settings.isPending, error: q.error ?? settings.error, budget, summary: monthSummary(q.data ?? [], budget) };
 }
 
 export function useLatest(metric: "sleepMin" | "steps" | "restingHr" | "weightKg") {
   const h = useHealth(90);
-  const rows = h.rows.filter((r) => r[metric] !== null);
-  return { latest: rows.at(-1) ?? null, rows: h.rows, loaded: h.loaded };
+  const rows = h.rows.filter((r) => r[metric] !== null && (metric !== "steps" || r.day === h.to)).sort((a, b) => a.day.localeCompare(b.day));
+  return { latest: rows.at(-1) ?? null, rows: h.rows, loaded: h.loaded, loading: h.loading, error: h.error };
 }

@@ -7,6 +7,7 @@ import type { ImportFilePreview, ImportPreview, ImportResult } from "../shared/s
 import { useSheet } from "./sheet";
 import { Icon, Money } from "./ui";
 import { notify } from "./toast";
+import { pdfReadError } from "./pdf-errors";
 
 const BANK: Record<string, string> = { revolut: "Revolut", zkb: "ZKB", yuh: "Yuh", unbekannt: "Bank nicht erkannt" };
 
@@ -57,7 +58,7 @@ export function UploadAction() {
       }
       sheet.open(<ImportSheet initial={files} />);
     } catch (e) {
-      notify((e as Error)?.message === "PDF zu gross" ? "PDF zu gross" : "Datei konnte nicht gelesen werden");
+      notify(pdfReadError(e));
     }
   }
   return (

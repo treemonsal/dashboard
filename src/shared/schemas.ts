@@ -157,6 +157,13 @@ export const settingsUpdate = z
     investSymbol: z.string().trim().toUpperCase().regex(/^([A-Z0-9][A-Z0-9.\-]{0,11})?$/),
     investShares: z.string().regex(/^(\d{1,7}(\.\d{1,6})?)?$/),
     investCurrency: z.enum(["USD", "CHF", "EUR"]),
+    investHoldings: z.string().max(4000).refine((value) => {
+      if (!value.trim()) return true;
+      try {
+        const rows = JSON.parse(value);
+        return Array.isArray(rows) && rows.length <= 20 && new Set(rows.map((r: { symbol?: string }) => r?.symbol)).size === rows.length && rows.every((r: { symbol?: string; shares?: number }) => r && ["VUAA", "XNAS", "NVDA"].includes(r.symbol ?? "") && typeof r.shares === "number" && Number.isFinite(r.shares) && r.shares > 0 && r.shares <= 10000000);
+      } catch { return false; }
+    }, "Gültige Portfolio Positionen mit positiven Anteilen erforderlich"),
     mamaName: z.string().trim().max(60),
     hideHomework: z.enum(["0", "1"]),
     schoolHolidayUntil: z.union([isoDate, z.literal("")]),
@@ -242,7 +249,7 @@ export const transactionCreate = z.object({
   isRepayment: z.boolean().optional(),
 });
 export const transactionBulk = z.object({ transactions: z.array(transactionCreate).min(1).max(1000) });
-export const transactionUpdate = transactionCreate.omit({ id: true }).partial().extend({ settled: z.boolean().optional() });
+export const transactionUpdate = transactionCreate.omit({ id: true }).partial().extend({ settled: z.boolean().optional(), repaymentOverride: z.boolean().nullable().optional() });
 export const transactionQuery = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/).optional(), limit: z.coerce.number().int().min(1).max(1000).default(200) });
 
 /* ---------- Depot ---------- */
@@ -546,6 +553,7 @@ export interface Transaction {
   description: string | null;
   mealOut: boolean;
   isRepayment: boolean;
+  repaymentOverride?: boolean | null;
   settledAt: string | null;
   internal: boolean;
   currency: string;

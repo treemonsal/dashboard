@@ -82,7 +82,7 @@ function writePlan(planId: string, b: z.infer<typeof gymPlanWrite>, sortOrder?: 
 
 const toTx = (r: typeof t.transactions.$inferSelect) => ({
   id: r.id, accountId: r.accountId, categoryId: r.categoryId, date: r.date, amount: r.amount, description: r.description,
-  mealOut: r.mealOut, isRepayment: r.isRepayment, settledAt: r.settledAt, internal: r.internal, currency: r.currency,
+  mealOut: r.mealOut, isRepayment: r.isRepayment, repaymentOverride: r.repaymentOverride, settledAt: r.settledAt, internal: r.internal, currency: r.currency,
 });
 
 /** Kategorie "Essen auswärts" setzt "Mahlzeit auswärts" standardmässig, alles andere (auch Snack) nicht. */
@@ -120,6 +120,7 @@ export function registerExtra(api: Hono<AppEnv>) {
   api.get("/export", async (c) => {
     const db = c.var.db;
     const data = {
+      schemaVersion: 2,
       exportedAt: nowIso(),
       settings: await db.select().from(t.settings),
       projects: await db.select().from(t.projects),
@@ -143,6 +144,11 @@ export function registerExtra(api: Hono<AppEnv>) {
       categoryRules: await db.select().from(t.categoryRules),
       investmentEntries: await db.select().from(t.investmentEntries),
       healthDaily: await db.select().from(t.healthDaily),
+      healthWorkouts: await db.select().from(t.healthWorkouts),
+      // Kalenderadressen enthalten Zugangsschlüssel. Nur öffentliche Metadaten exportieren.
+      calendars: await db.select({ id: t.calendars.id, name: t.calendars.name, sortOrder: t.calendars.sortOrder, createdAt: t.calendars.createdAt, updatedAt: t.calendars.updatedAt }).from(t.calendars),
+      calendarEvents: await db.select().from(t.calendarEvents),
+      syncRuns: await db.select().from(t.syncRuns),
     };
     return c.json(data);
   });
@@ -330,13 +336,13 @@ export function registerExtra(api: Hono<AppEnv>) {
   api.post("/transactions", v("json", transactionCreate), async (c) => {
     const b = c.req.valid("json");
     const mealOut = await mealDefault(c.var.db, b.categoryId, b.mealOut);
-    const row = await c.var.db.insert(t.transactions).values({ ...b, mealOut, id: b.id ?? newId() }).returning().get();
+    const row = await c.var.db.insert(t.transactions).values({ ...b, mealOut, repaymentOverride: b.isRepayment ?? null, id: b.id ?? newId() }).returning().get();
     return c.json(toTx(row), 201);
   });
   api.post("/transactions/bulk", v("json", transactionBulk), async (c) => {
     const db = c.var.db;
     const rows = [];
-    for (const x of c.req.valid("json").transactions) rows.push({ ...x, id: x.id ?? newId(), mealOut: await mealDefault(db, x.categoryId, x.mealOut) });
+    for (const x of c.req.valid("json").transactions) rows.push({ ...x, repaymentOverride: x.isRepayment ?? null, id: x.id ?? newId(), mealOut: await mealDefault(db, x.categoryId, x.mealOut) });
     // D1 erlaubt wenige Parameter pro Anweisung: in kleinen Gruppen einfügen.
     for (let i = 0; i < rows.length; i += 5) await db.insert(t.transactions).values(rows.slice(i, i + 5));
     return c.json({ inserted: rows.length }, 201);
@@ -349,11 +355,13 @@ export function registerExtra(api: Hono<AppEnv>) {
     const before = await c.var.db.select({ categoryId: t.transactions.categoryId }).from(t.transactions).where(eq(t.transactions.id, txId)).get();
     // Von Hand umgeschaltet: Mahlzeit ja/nein bleibt bei späteren Importen bestehen.
     if (rest.mealOut !== undefined) set.mealOverride = rest.mealOut;
+    if (rest.isRepayment !== undefined && rest.repaymentOverride === undefined) set.repaymentOverride = rest.isRepayment;
+    if (set.repaymentOverride !== undefined && set.repaymentOverride !== null) set.isRepayment = set.repaymentOverride;
     const row = await c.var.db.update(t.transactions).set(set).where(eq(t.transactions.id, txId)).returning().get();
     if (!row) return notFound(c);
     // Kategorie korrigiert: Regel lernen (gilt ab dem nächsten Import und für gleichartige "Sonstiges"-Buchungen)
     if (rest.categoryId && rest.categoryId !== before?.categoryId) await learnFromCorrection(c.var.db, txId, rest.categoryId);
-    else if (rest.mealOut !== undefined || rest.isRepayment !== undefined) await recompute(c.var.db);
+    else if (rest.mealOut !== undefined || rest.isRepayment !== undefined || rest.repaymentOverride !== undefined) await recompute(c.var.db);
     const fresh = await c.var.db.select().from(t.transactions).where(eq(t.transactions.id, txId)).get();
     return c.json(toTx(fresh ?? row));
   });

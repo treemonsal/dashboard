@@ -37,7 +37,7 @@ import { z as zod } from "zod";
 import { idParam, newId, nowIso, notFound, v, type AppEnv, type Bindings, type Db } from "./util";
 import { registerExtra } from "./routes";
 
-const { taskEvents, exams, examTopics, goals, grades, habitLogs, habits, projects, subjects, syncRuns, tasks } = schema;
+const { exams, examTopics, goals, grades, habitLogs, habits, projects, subjects, syncRuns, tasks } = schema;
 
 export type { Bindings };
 
@@ -172,48 +172,42 @@ export function createApp() {
     const { done, actualMin, ...rest } = c.req.valid("json");
     const taskId = c.req.valid("param").id;
     if (rest.parentId === taskId) return c.json({ error: "Eine Aufgabe kann nicht ihre eigene Unteraufgabe sein" }, 400);
-    const set: Partial<typeof tasks.$inferInsert> = { ...rest, updatedAt: nowIso() };
     const current = await c.var.db.select().from(tasks).where(eq(tasks.id, taskId)).get();
     if (!current) return notFound(c);
-    if (done !== undefined) {
-      // Bereits erledigte Aufgaben behalten ihren ursprünglichen Zeitpunkt.
-      set.doneAt = done ? (current.doneAt ?? nowIso()) : null;
-    }
-    const row = await c.var.db.update(tasks).set(set).where(eq(tasks.id, taskId)).returning().get();
-    if (!row) return notFound(c);
-    // Lernen aus dem Alltag: pro Erledigen Wochentag, Uhrzeit und Dauer festhalten.
+    const mutationId = newId();
+    const set: Partial<typeof tasks.$inferInsert> = {
+      ...rest, updatedAt: nowIso(), mutationId, recurrenceUntouched: false,
+    };
+    if (done !== undefined) set.doneAt = done ? (current.doneAt ?? nowIso()) : null;
+    const row = { ...current, ...set } as typeof tasks.$inferSelect;
+    // D1-Batches sind Transaktionen. Der eindeutige Mutationstoken sperrt auch
+    // Folgeanweisungen, wenn ein gleichzeitiger Request dieselbe Aufgabe geändert hat.
+    const update = c.var.db.update(tasks).set(set).where(and(eq(tasks.id, taskId), eq(tasks.mutationId, current.mutationId))).returning().toSQL();
+    const stmts = [c.env.DB.prepare(update.sql).bind(...update.params)];
+    const guard = "EXISTS (SELECT 1 FROM tasks WHERE id = ? AND mutation_id = ?)";
     if (done === true && !current.doneAt) {
       const at = new Date(row.doneAt!);
       const day = todayInZone(at);
-      await c.var.db.insert(taskEvents).values({
-        id: newId(),
-        taskId,
-        title: row.title,
-        day,
-        weekday: weekdayNum(day),
-        plannedTime: row.dueTime,
-        doneTime: timeInZone(at),
-        durationMin: actualMin ?? row.durationMin,
-        plannedMin: row.durationMin,
-      });
-      // Wiederkehrende Aufgabe: die nächste entsteht sofort, mit denselben Angaben.
+      stmts.push(c.env.DB.prepare(`INSERT INTO task_events (id, task_id, title, day, weekday, planned_time, done_time, duration_min, planned_min)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${guard}`).bind(
+        newId(), taskId, row.title, day, weekdayNum(day), row.dueTime, timeInZone(at), actualMin ?? row.durationMin, row.durationMin, taskId, mutationId,
+      ));
       const next = row.recurrence ? nextDue(row.recurrence, row.dueDate, day) : null;
-      if (next) {
-        await c.var.db.insert(tasks).values({
-          id: newId(), title: row.title, notes: row.notes, projectId: row.projectId, parentId: row.parentId, dueDate: next, dueTime: row.dueTime,
-          priority: row.priority, recurrence: row.recurrence, durationMin: row.durationMin, examId: row.examId, sortOrder: row.sortOrder,
-        });
-      }
+      if (next) stmts.push(c.env.DB.prepare(`INSERT INTO tasks
+        (id, title, notes, project_id, parent_id, due_date, due_time, priority, recurrence, duration_min, exam_id, sort_order, predecessor_id, recurrence_untouched)
+        SELECT ?, title, notes, project_id, parent_id, ?, due_time, priority, recurrence, duration_min, exam_id, sort_order, id, 1
+        FROM tasks WHERE id = ? AND mutation_id = ?
+        ON CONFLICT(predecessor_id) DO NOTHING`).bind(newId(), next, taskId, mutationId));
     } else if (done === false && current.doneAt) {
-      await c.var.db.delete(taskEvents).where(eq(taskEvents.taskId, taskId));
-      // Zurückgenommen: die dabei entstandene, noch unberührte Folgeaufgabe wieder entfernen.
-      const next = row.recurrence ? nextDue(row.recurrence, row.dueDate, todayInZone(new Date(current.doneAt))) : null;
-      if (next && row.recurrence) {
-        await c.var.db.delete(tasks).where(
-          and(eq(tasks.title, row.title), eq(tasks.recurrence, row.recurrence), eq(tasks.dueDate, next), isNull(tasks.doneAt), gte(tasks.createdAt, current.doneAt), row.parentId ? eq(tasks.parentId, row.parentId) : isNull(tasks.parentId)),
-        );
-      }
+      stmts.push(c.env.DB.prepare(`DELETE FROM task_events WHERE task_id = ? AND ${guard}`).bind(taskId, taskId, mutationId));
+      // Nur unsere eigene, nie bearbeitete Folgeaufgabe entfernen. Unteraufgaben
+      // und eine weitere Wiederholung schützen sie ebenfalls vor Kaskadenlöschung.
+      stmts.push(c.env.DB.prepare(`DELETE FROM tasks WHERE predecessor_id = ? AND recurrence_untouched = 1 AND done_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM tasks child WHERE child.parent_id = tasks.id OR child.predecessor_id = tasks.id)
+        AND ${guard}`).bind(taskId, taskId, mutationId));
     }
+    const [updated] = await c.env.DB.batch(stmts);
+    if (!updated.results.length) return c.json({ error: "Die Aufgabe wurde inzwischen geändert. Bitte erneut versuchen." }, 409);
     return c.json(row);
   });
   api.delete("/tasks/:id", v("param", idParam), async (c) => {
@@ -441,7 +435,7 @@ export function createApp() {
 }
 
 const TYPES: Record<string, string> = {
-  html: "text/html; charset=utf-8", js: "text/javascript; charset=utf-8", css: "text/css; charset=utf-8",
+  html: "text/html; charset=utf-8", js: "text/javascript; charset=utf-8", mjs: "text/javascript; charset=utf-8", css: "text/css; charset=utf-8",
   json: "application/json", webmanifest: "application/manifest+json", svg: "image/svg+xml",
   png: "image/png", woff2: "font/woff2", ico: "image/x-icon", map: "application/json",
 };

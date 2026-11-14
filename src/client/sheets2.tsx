@@ -1,3 +1,4 @@
+import { QueryNotice, SaveNotice } from "./query-state";
 import { useState } from "react";
 import { addDays, dayCompact } from "../shared/dates";
 import { byCategory } from "../shared/geld";
@@ -17,7 +18,7 @@ export function GeldSheet() {
     <div>
       <h3>Übrig</h3>
       <div className="when">{monthTitle(m.month)}</div>
-      {!m.summary.hasData ? (
+      {!m.loaded ? <QueryNotice pending={m.loading} error={m.error} /> : !m.summary.hasData ? (
         <div className="empty">Noch kein Export hochgeladen.</div>
       ) : (
         <>
@@ -78,8 +79,8 @@ export function HealthSheet({ metric }: { metric: Metric }) {
     <div>
       <h3>{cfg.title}</h3>
       <Segments value={range} onChange={setRange} options={[{ v: 7, label: "7 Tage" }, { v: 30, label: "30" }, { v: 90, label: "90" }]} label="Zeitraum" />
-      {empty ? (
-        <div className="empty" style={{ paddingTop: 18 }}>{metric === "weight" ? (h.rows.length ? "Kein Gewicht in diesem Zeitraum." : "Noch kein Gewicht eingetragen.") : "Noch nicht mit Fitbit verbunden."}</div>
+      {!h.loaded ? <QueryNotice pending={h.loading} error={h.error} /> : empty ? (
+        <div className="empty" style={{ paddingTop: 18 }}>{metric === "weight" ? (h.rows.length ? "Kein Gewicht in diesem Zeitraum." : "Noch kein Gewicht eingetragen.") : "Keine Messwerte in diesem Zeitraum."}</div>
       ) : (
         <>
           <div style={{ margin: "16px 0 6px" }}>
@@ -109,7 +110,8 @@ export function HealthSheet({ metric }: { metric: Metric }) {
               <span className="faint">kg</span>
             </span>
           </div>
-          <button type="button" className="cta press" disabled={!(w >= 20 && w <= 400)} onClick={() => { put.mutate({ day: today, patch: { weightKg: Math.round(w * 10) / 10 } }); setKg(""); }}>Eintragen</button>
+          <button type="button" className="cta press" disabled={!(w >= 20 && w <= 400) || put.isPending} onClick={() => { put.mutate({ day: today, patch: { weightKg: Math.round(w * 10) / 10 } }, { onSuccess: () => setKg((current) => current === kg ? "" : current) }); }}>Eintragen</button>
+          <SaveNotice error={put.error} />
         </>
       )}
     </div>
