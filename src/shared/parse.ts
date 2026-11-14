@@ -1,11 +1,14 @@
 // Schnelleingabe: erkennt "heute", "morgen", Wochentage, "18 Uhr", "30 min" im Text und lässt den Rest als Titel stehen.
 import { addDays, weekdayNum } from "./dates";
+import { buildRule } from "./recurrence";
 
 export interface QuickParse {
   title: string;
   dueDate: string | null;
   dueTime: string | null;
   durationMin: number | null;
+  /** Wiederholungsregel (RRULE) aus "jeden Montag", "täglich", "jede Woche" usw. */
+  recurrence: string | null;
 }
 
 const L = "(?<![\\p{L}\\p{N}])";
@@ -23,6 +26,34 @@ function take(text: string, rx: RegExp): { rest: string; m: RegExpExecArray } | 
   return { rest: (text.slice(0, m.index) + " " + text.slice(m.index + m[0].length)).replace(/\s+/g, " "), m };
 }
 
+const WD_LONG = "sonntag|montag|dienstag|mittwoch|donnerstag|freitag|samstag";
+const WD_PLURAL = "sonntags|montags|dienstags|mittwochs|donnerstags|freitags|samstags";
+const WD_INDEX = ["sonntag", "montag", "dienstag", "mittwoch", "donnerstag", "freitag", "samstag"];
+const dayIndex = (w: string) => WD_INDEX.indexOf(w.toLowerCase().replace(/s$/, ""));
+
+type Rec = { kind: "daily" | "weekdays" | "weekly" | "monthly" | "yearly" } | { kind: "days"; days: number[] } | { kind: "every"; n: number; unit: "day" | "week" | "month" };
+
+/** Erkennt Wiederholungen im Text und nimmt sie heraus. */
+function takeRecurrence(text: string): { rest: string; rec: Rec } | null {
+  let x: ReturnType<typeof take>;
+  if ((x = take(text, re("alle\\s+(\\d{1,3})\\s+(tage|tagen|wochen|monate|monaten)")))) {
+    const n = +x.m[1];
+    const unit = x.m[2].toLowerCase().startsWith("t") ? "day" : x.m[2].toLowerCase().startsWith("w") ? "week" : "month";
+    if (n >= 1 && n <= 365) return { rest: x.rest, rec: { kind: "every", n, unit } };
+  }
+  if ((x = take(text, re("(?:jeden\\s+werktag|werktags|an\\s+werktagen|wochentags)")))) return { rest: x.rest, rec: { kind: "weekdays" } };
+  if ((x = take(text, re("(?:täglich|jeden\\s+tag)")))) return { rest: x.rest, rec: { kind: "daily" } };
+  const list = `((?:${WD_PLURAL}|jede[nm]?\\s+(?:${WD_LONG}))(?:\\s*(?:,|und|&)\\s*(?:jede[nm]?\\s+)?(?:${WD_LONG}|${WD_PLURAL}))*)`;
+  if ((x = take(text, re(list)))) {
+    const days = [...new Set([...x.m[1].toLowerCase().matchAll(new RegExp(`${WD_LONG}|${WD_PLURAL}`, "g"))].map((m) => dayIndex(m[0])))];
+    if (days.length) return { rest: x.rest, rec: { kind: "days", days } };
+  }
+  if ((x = take(text, re("(?:jede\\s+woche|wöchentlich)")))) return { rest: x.rest, rec: { kind: "weekly" } };
+  if ((x = take(text, re("(?:jeden\\s+monat|monatlich)")))) return { rest: x.rest, rec: { kind: "monthly" } };
+  if ((x = take(text, re("(?:jedes\\s+jahr|jährlich)")))) return { rest: x.rest, rec: { kind: "yearly" } };
+  return null;
+}
+
 const pad = (n: number) => String(n).padStart(2, "0");
 const validTime = (h: number, m: number) => h >= 0 && h <= 23 && m >= 0 && m <= 59;
 
@@ -31,6 +62,13 @@ export function parseQuick(input: string, today: string): QuickParse {
   let dueDate: string | null = null;
   let dueTime: string | null = null;
   let durationMin: number | null = null;
+  let rec: Rec | null = null;
+
+  const r0 = takeRecurrence(text);
+  if (r0) {
+    rec = r0.rec;
+    text = r0.rest;
+  }
 
   // Dauer: "30 min", "1 h", "1.5 h", "90 minuten"
   let t = take(text, re("(\\d+(?:[.,]\\d+)?)\\s*(?:h|std|stunden?)"));
@@ -97,7 +135,24 @@ export function parseQuick(input: string, today: string): QuickParse {
   let title = text.replace(/\s+/g, " ").trim();
   title = title.replace(/^(?:um|am|ab|bis|für)\s+/iu, "").replace(/\s+(?:um|am|ab|bis|für|,)$/iu, "").replace(/[\s,;:-]+$/u, "").trim();
   if (!title) title = input.trim();
-  return { title, dueDate, dueTime, durationMin };
+
+  let recurrence: string | null = null;
+  if (rec) {
+    // Ohne Datum beginnt die Wiederholung beim nächsten passenden Tag, heute eingeschlossen.
+    if (rec.kind === "days" && !dueDate) {
+      for (let i = 0; i < 7 && !dueDate; i++) if (rec.days.includes(weekdayNum(addDays(today, i)))) dueDate = addDays(today, i);
+    }
+    if (rec.kind === "weekdays" && !dueDate) {
+      dueDate = today;
+      while (weekdayNum(dueDate) === 0 || weekdayNum(dueDate) === 6) dueDate = addDays(dueDate, 1);
+    }
+    if (!dueDate) dueDate = today;
+    if (rec.kind === "days") recurrence = buildRule({ kind: "weekly", days: rec.days }, dueDate);
+    else if (rec.kind === "every") {
+      recurrence = rec.unit === "day" ? buildRule({ kind: "every", n: rec.n }) : rec.unit === "week" ? `FREQ=WEEKLY;INTERVAL=${rec.n};BYDAY=${["SU", "MO", "TU", "WE", "TH", "FR", "SA"][weekdayNum(dueDate)]}` : `FREQ=MONTHLY;INTERVAL=${rec.n}`;
+    } else recurrence = buildRule(rec.kind === "weekly" ? { kind: "weekly", days: [] } : { kind: rec.kind }, dueDate);
+  }
+  return { title, dueDate, dueTime, durationMin, recurrence };
 }
 
 /** Nächster Tag mit diesem Wochentag, mindestens morgen. */

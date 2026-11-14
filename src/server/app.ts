@@ -31,6 +31,7 @@ import {
   type ExamDetail,
 } from "../shared/schemas";
 import { timeInZone, todayInZone, weekdayNum, zoneMidnightUtc } from "../shared/dates";
+import { nextDue } from "../shared/recurrence";
 import { z as zod } from "zod";
 import { idParam, newId, nowIso, notFound, v, type AppEnv, type Bindings, type Db } from "./util";
 import { registerExtra } from "./routes";
@@ -177,8 +178,23 @@ export function createApp() {
         durationMin: actualMin ?? row.durationMin,
         plannedMin: row.durationMin,
       });
+      // Wiederkehrende Aufgabe: die nächste entsteht sofort, mit denselben Angaben.
+      const next = row.recurrence ? nextDue(row.recurrence, row.dueDate, day) : null;
+      if (next) {
+        await c.var.db.insert(tasks).values({
+          id: newId(), title: row.title, notes: row.notes, projectId: row.projectId, parentId: row.parentId, dueDate: next, dueTime: row.dueTime,
+          priority: row.priority, recurrence: row.recurrence, durationMin: row.durationMin, examId: row.examId, sortOrder: row.sortOrder,
+        });
+      }
     } else if (done === false && current.doneAt) {
       await c.var.db.delete(taskEvents).where(eq(taskEvents.taskId, taskId));
+      // Zurückgenommen: die dabei entstandene, noch unberührte Folgeaufgabe wieder entfernen.
+      const next = row.recurrence ? nextDue(row.recurrence, row.dueDate, todayInZone(new Date(current.doneAt))) : null;
+      if (next && row.recurrence) {
+        await c.var.db.delete(tasks).where(
+          and(eq(tasks.title, row.title), eq(tasks.recurrence, row.recurrence), eq(tasks.dueDate, next), isNull(tasks.doneAt), gte(tasks.createdAt, current.doneAt), row.parentId ? eq(tasks.parentId, row.parentId) : isNull(tasks.parentId)),
+        );
+      }
     }
     return c.json(row);
   });

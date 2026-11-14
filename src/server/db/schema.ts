@@ -318,3 +318,53 @@ export const categoryRules = sqliteTable(
   },
   (t) => [uniqueIndex("category_rules_pattern_uq").on(t.pattern)],
 );
+
+/* ---------- Kalender (nur lesen): geheime iCal-Adresse und abgeglichene Termine ---------- */
+export const calendars = sqliteTable("calendars", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  // GEHEIM: Zugangsschlüssel zum Kalender. Nie in Export, Logs oder Antworten.
+  url: text("url").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  ...timestamps,
+});
+
+export const calendarEvents = sqliteTable(
+  "calendar_events",
+  {
+    id: text("id").primaryKey(),
+    calendarId: text("calendar_id").notNull().references(() => calendars.id, { onDelete: "cascade" }),
+    uid: text("uid").notNull(),
+    title: text("title").notNull(),
+    // Lokales Datum und lokale Zeit in Europe/Zurich; Ende ganztägig = letzter Tag
+    startDate: text("start_date").notNull(),
+    startTime: text("start_time"),
+    endDate: text("end_date").notNull(),
+    endTime: text("end_time"),
+    allDay: integer("all_day", { mode: "boolean" }).notNull().default(false),
+    location: text("location"),
+    description: text("description"),
+    updatedAt: text("updated_at").notNull().default(now),
+  },
+  (t) => [index("calendar_events_start_idx").on(t.startDate), index("calendar_events_cal_idx").on(t.calendarId)],
+);
+
+/* ---------- Web Push ---------- */
+export const pushSubscriptions = sqliteTable(
+  "push_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"),
+    createdAt: text("created_at").notNull().default(now),
+  },
+  (t) => [uniqueIndex("push_subscriptions_endpoint_uq").on(t.endpoint)],
+);
+
+/** Gesendete Erinnerungen: der Schlüssel verhindert, dass eine Erinnerung zweimal rausgeht. */
+export const sentReminders = sqliteTable("sent_reminders", {
+  key: text("key").primaryKey(),
+  sentAt: text("sent_at").notNull().default(now),
+});

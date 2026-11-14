@@ -7,7 +7,7 @@ const today = "2026-11-13"; // Freitag
 
 describe("Schnelleingabe", () => {
   it("erkennt morgen, Uhrzeit und Dauer", () => {
-    expect(parseQuick("Franz lernen morgen 18 Uhr 30 min", today)).toEqual({ title: "Franz lernen", dueDate: "2026-11-14", dueTime: "18:00", durationMin: 30 });
+    expect(parseQuick("Franz lernen morgen 18 Uhr 30 min", today)).toEqual({ title: "Franz lernen", dueDate: "2026-11-14", dueTime: "18:00", durationMin: 30, recurrence: null });
   });
   it("erkennt heute und um 18", () => {
     const r = parseQuick("Zimmer aufräumen heute um 18", today);
@@ -22,7 +22,7 @@ describe("Schnelleingabe", () => {
     expect(parseQuick("Lernen übermorgen 18:30 1.5 h", today)).toMatchObject({ dueDate: "2026-11-15", dueTime: "18:30", durationMin: 90 });
   });
   it("lässt Zahlen im Titel stehen und liest Daten", () => {
-    expect(parseQuick("Kapitel 3 lernen", today)).toEqual({ title: "Kapitel 3 lernen", dueDate: null, dueTime: null, durationMin: null });
+    expect(parseQuick("Kapitel 3 lernen", today)).toEqual({ title: "Kapitel 3 lernen", dueDate: null, dueTime: null, durationMin: null, recurrence: null });
     expect(parseQuick("Abgabe 27.11.", today)).toMatchObject({ title: "Abgabe", dueDate: "2026-11-27", dueTime: null });
     expect(parseQuick("so ein Ding", today).dueDate).toBeNull();
   });

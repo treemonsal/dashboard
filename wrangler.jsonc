@@ -3,14 +3,24 @@
   "name": "dashboard",
   "main": "src/server/index.ts",
   "compatibility_date": "2026-11-01",
-  "compatibility_flags": ["nodejs_compat"],
+  // global_fetch_strictly_public: nötig für Client ID Metadata Documents (OAuth für den Connector), schützt vor SSRF.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   // Jede Anfrage geht zuerst durch den Worker, damit der Login auch für die Oberfläche geprüft wird.
   "assets": {
     "not_found_handling": "single-page-application",
     "run_worker_first": true,
     "binding": "ASSETS"
   },
-  "kv_namespaces": [{ "binding": "STATIC", "id": "7e66919df96648599328a8606b136181" }],
+  "kv_namespaces": [
+    { "binding": "STATIC", "id": "7e66919df96648599328a8606b136181" },
+    // OAuth-Zustand des MCP-Connectors (Clients, Zugriffe, Tokens nur als Hash). Siehe docs/connector.md.
+    { "binding": "OAUTH_KV", "id": "0cc2d6be0a624222813748740cd4c3cc" }
+  ],
+  // Rate-Limits für den Connector: pro Token auf /mcp, pro IP auf Registrierung und Token-Endpunkt.
+  "ratelimits": [
+    { "name": "MCP_RATE_LIMIT", "namespace_id": "5181", "simple": { "limit": 120, "period": 60 } },
+    { "name": "OAUTH_RATE_LIMIT", "namespace_id": "5182", "simple": { "limit": 30, "period": 60 } }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -23,7 +33,9 @@
     // Wird nach dem Einrichten von Cloudflare Access gesetzt (Team-Domain ohne https, z.B. "tim.cloudflareaccess.com").
     "ACCESS_TEAM_DOMAIN": "tim-dashboard.cloudflareaccess.com",
     // Application Audience (AUD) Tag der Access-Anwendung.
-    "ACCESS_AUD": "af57f5199d1efda487376aed5e8740376b1e3fb4cf8c5be1819f471c6be5cc2b"
+    "ACCESS_AUD": "af57f5199d1efda487376aed5e8740376b1e3fb4cf8c5be1819f471c6be5cc2b",
+    // Öffentliche Adresse des Workers: Aussteller (issuer) und Ressource https://…/mcp für den MCP-Connector.
+    "MCP_ORIGIN": "https://dashboard.hahntim518.workers.dev"
     // OWNER_EMAIL wird als Secret gesetzt: wrangler secret put OWNER_EMAIL
   },
   "workers_dev": true,

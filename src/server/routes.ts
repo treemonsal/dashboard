@@ -31,6 +31,8 @@ import {
 import { planStudyBlocks } from "../shared/lernplan";
 import { todayInZone, weekdayNum } from "../shared/dates";
 import { commitImport, learnFromCorrection, previewImport, recompute } from "./bankimport";
+import { registerCalendar } from "./calendar";
+import { registerPush } from "./push";
 import { batch, idParam, newId, nowIso, notFound, v, type AppEnv, type Db } from "./util";
 
 const t = schema;
@@ -89,6 +91,9 @@ async function mealDefault(db: Db, categoryId: string | null | undefined, explic
 }
 
 export function registerExtra(api: Hono<AppEnv>) {
+  registerCalendar(api);
+  registerPush(api);
+
   /* ---------- Einstellungen ---------- */
   api.get("/settings", async (c) => {
     const rows = await c.var.db.select().from(t.settings);

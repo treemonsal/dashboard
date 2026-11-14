@@ -153,6 +153,7 @@ export const settingsUpdate = z
     investMonthly: z.string().regex(/^\d{1,6}(\.\d{1,2})?$/),
     investStart: z.union([isoDate, z.literal("")]),
     mamaName: z.string().trim().max(60),
+    hideHomework: z.enum(["0", "1"]),
   })
   .partial()
   .strict();
@@ -510,3 +511,50 @@ export interface InvestmentEntry {
   amount: number;
   note: string | null;
 }
+
+/* ---------- Kalender (nur lesen) und Erinnerungen ---------- */
+export const calendarCreate = z.object({
+  id: id.optional(),
+  name: text(60),
+  // Die geheime Adresse; wird nur geprüft und gespeichert, nie zurückgegeben.
+  url: z.string().trim().min(1).max(2000),
+});
+export const calendarEventQuery = z.object({ from: isoDate, to: isoDate });
+
+export interface CalendarInfo {
+  id: string;
+  name: string;
+  /** Gekürzt, z.B. "calendar.google.com/…/basic.ics". */
+  urlMasked: string;
+}
+export interface CalendarEvent {
+  id: string;
+  calendarId: string;
+  calendarName: string;
+  uid: string;
+  title: string;
+  startDate: string;
+  startTime: string | null;
+  endDate: string;
+  endTime: string | null;
+  allDay: boolean;
+  location: string | null;
+  description: string | null;
+}
+export interface CalendarSyncResult {
+  ok: boolean;
+  message: string;
+  events: number;
+}
+
+export const pushSubscribe = z.object({
+  endpoint: z.string().url().max(1000).refine((u) => u.startsWith("https://"), "Nur https"),
+  keys: z.object({ p256dh: z.string().min(80).max(120), auth: z.string().min(16).max(40) }),
+});
+export const pushUnsubscribe = z.object({ endpoint: z.string().max(1000) });
+export interface PushResult {
+  sent: number;
+  removed: number;
+  failed: number;
+}
+export type CalendarCreate = z.input<typeof calendarCreate>;

@@ -49,20 +49,58 @@ export function zoneMidnightUtc(date: string, zone: string = ZONE): string {
   return new Date(t).toISOString();
 }
 
+// Intl.DateTimeFormat ist teuer in der Erstellung: pro Zone nur einmal anlegen.
+const offsetFormats = new Map<string, Intl.DateTimeFormat>();
+
 function zoneOffsetMs(at: Date, zone: string): number {
-  const f = new Intl.DateTimeFormat("en-US", {
-    timeZone: zone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+  let f = offsetFormats.get(zone);
+  if (!f) {
+    f = new Intl.DateTimeFormat("en-US", {
+      timeZone: zone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    offsetFormats.set(zone, f);
+  }
   const p = Object.fromEntries(f.formatToParts(at).map((x) => [x.type, x.value]));
   const asUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
   return asUtc - Math.floor(at.getTime() / 1000) * 1000;
+}
+
+/** Gültiger IANA-Zonenname? (Ergebnis wird zwischengespeichert.) */
+const zoneOk = new Map<string, boolean>();
+export function isValidZone(zone: string): boolean {
+  let ok = zoneOk.get(zone);
+  if (ok === undefined) {
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: zone });
+      ok = true;
+    } catch {
+      ok = false;
+    }
+    zoneOk.set(zone, ok);
+  }
+  return ok;
+}
+
+/** UTC-Millisekunden einer lokalen Wandzeit (Datum + Minuten seit Mitternacht) in einer Zone. */
+export function zoneLocalToUtcMs(date: string, minutes: number, zone: string = ZONE): number {
+  const guess = utcDay(date) + minutes * 60_000;
+  let t = guess;
+  for (let i = 0; i < 2; i++) t = guess - zoneOffsetMs(new Date(t), zone);
+  return t;
+}
+
+/** Lokales Datum und Minuten seit Mitternacht eines UTC-Zeitpunkts in einer Zone. */
+export function localInZone(ms: number, zone: string = ZONE): { date: string; minutes: number } {
+  // Über den Versatz rechnen statt zu formatieren: schnell und ohne weitere Formatierer.
+  const shifted = new Date(ms + zoneOffsetMs(new Date(ms), zone));
+  return { date: shifted.toISOString().slice(0, 10), minutes: shifted.getUTCHours() * 60 + shifted.getUTCMinutes() };
 }
 
 /** ISO-Kalenderwoche. */

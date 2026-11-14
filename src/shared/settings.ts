@@ -14,6 +14,8 @@ export type Settings = {
   investStart: string;
   /** Wer die Hälfte der Mahlzeiten auswärts zurückzahlt (leer, bis eingetragen) */
   mamaName: string;
+  /** "1" = Einträge, die mit "Hausaufgabe" beginnen, im Kalender ausblenden */
+  hideHomework: string;
 };
-export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "4", salary: "650", investMonthly: "350", investStart: "", mamaName: "" };
+export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "4", salary: "650", investMonthly: "350", investStart: "", mamaName: "", hideHomework: "1" };
 

@@ -10,6 +10,12 @@ export interface Bindings extends AuthEnv {
   DB: D1Database;
   ASSETS?: Fetcher;
   STATIC?: KVNamespace;
+  /** Secret: privater VAPID-Schlüssel für Web Push (wrangler secret put VAPID_PRIVATE_KEY). */
+  VAPID_PRIVATE_KEY?: string;
+  /** Kontaktadresse für VAPID (mailto: oder https). */
+  VAPID_SUBJECT?: string;
+  /** Nur Tests und lokale Entwicklung: erlaubt Kalenderadressen auf localhost. Nie in Produktion setzen. */
+  CALENDAR_ALLOW_LOCAL?: string;
 }
 
 export type Db = DrizzleD1Database<typeof schema>;
