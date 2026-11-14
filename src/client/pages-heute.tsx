@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { dayMonthLong, daysUntil, numberWord, weekdayLong, dayCompact, minutesOf, timeInZone } from "../shared/dates";
 import { parseQuick } from "../shared/parse";
 import { describeRule } from "../shared/recurrence";
@@ -165,6 +165,11 @@ export function Aufgaben() {
   const all = tasks.data ?? [];
   const lists = { eingang: inbox(all), heute: tasksToday(all, today), demnaechst: upcomingTasks(all, today) };
   const parsed = text.trim() ? parseQuick(text, today) : null;
+  const [composing, setComposing] = useState(false);
+  const cmpInput = useRef<HTMLInputElement>(null);
+  // focus() muss direkt im Antippen passieren, sonst öffnet das iPhone die Tastatur nicht.
+  const openComposer = () => { setComposing(true); cmpInput.current?.focus(); };
+  const closeComposer = () => { cmpInput.current?.blur(); setComposing(false); };
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -232,12 +237,19 @@ export function Aufgaben() {
         </>
       )}
 
+      {/* Unten nur ein Knopf. Getippt wird oben im Bild: so muss das iPhone die Seite nie verschieben. */}
       <div className="qe">
-        {chips.length > 0 && <div className="chips">{chips.map((c) => (<span key={String(c)}>{c}</span>))}</div>}
-        <form onSubmit={submit}>
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder={seg === "projekte" && openProject ? "Neue Aufgabe im Projekt" : "Neue Aufgabe"} maxLength={500} aria-label="Neue Aufgabe" enterKeyHint="send" />
-          <button type="submit" className="press" disabled={!parsed?.title} aria-label="Hinzufügen"><Icon n="up" /></button>
-        </form>
+        <button type="button" className="qe-open press" onClick={openComposer}>Neue Aufgabe</button>
+      </div>
+      <div className={`cmp ${composing ? "on" : ""}`} onPointerDown={(e) => { if (e.target === e.currentTarget) closeComposer(); }} aria-hidden={!composing}>
+        <div className="cmp-box">
+          <form onSubmit={submit}>
+            <input ref={cmpInput} value={text} onChange={(e) => setText(e.target.value)} onBlur={() => setTimeout(() => { if (document.activeElement !== cmpInput.current) setComposing(false); }, 150)}
+              placeholder={seg === "projekte" && openProject ? "Neue Aufgabe im Projekt" : "Neue Aufgabe"} maxLength={500} aria-label="Neue Aufgabe" enterKeyHint="send" tabIndex={composing ? 0 : -1} />
+            <button type="submit" className="press" disabled={!parsed?.title} aria-label="Hinzufügen" onPointerDown={(e) => e.preventDefault()}><Icon n="up" /></button>
+          </form>
+          {chips.length > 0 && <div className="chips">{chips.map((c) => (<span key={String(c)}>{c}</span>))}</div>}
+        </div>
       </div>
       <div className="qe-space" />
     </div>

@@ -51,9 +51,9 @@ export function Geld() {
       </div>
       <div className="acts">
         <UploadAction />
-        <RoundAction icon="bars" label="Analyse" href="/analyse" />
-        <RoundAction icon="trend" label="Depot" onClick={() => sheet.open(<DepotSheet />)} />
-        <RoundAction icon="person" label="Offen von Mama" onClick={() => sheet.open(<MamaSheet />)} />
+        <RoundAction icon="chart" label="Analyse" href="/analyse" />
+        <RoundAction icon="coin" label="Depot" onClick={() => sheet.open(<DepotSheet />)} />
+        <RoundAction icon="fork" label="Offen von Mama" onClick={() => sheet.open(<MamaSheet />)} />
       </div>
 
       <div className="card">
