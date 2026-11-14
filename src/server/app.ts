@@ -78,6 +78,20 @@ export function createApp() {
     c.res = new Response(c.res.body, { status: c.res.status, statusText: c.res.statusText, headers: h });
   });
 
+  // Drei öffentliche Seiten ohne persönliche Angaben. Google verlangt sie, damit die Fitbit-Verbindung dauerhaft hält.
+  app.get("/info", (c) => c.html(publicPage("Dashboard", ["Dies ist eine private Anwendung für eine einzelne Person. Sie zeigt ihr eigene Aufgaben, Termine, Finanzen und Gesundheitswerte.", "Die Anwendung ist nicht öffentlich nutzbar. Ein Konto kann nicht erstellt werden."])));
+  app.get("/datenschutz", (c) => c.html(publicPage("Datenschutzerklärung", [
+    "Diese Anwendung wird von einer Privatperson ausschliesslich für den eigenen Gebrauch betrieben. Es gibt keine weiteren Nutzerinnen oder Nutzer.",
+    "Mit Zustimmung der Besitzerin oder des Besitzers liest die Anwendung über die Google Health API Schlaf, Schritte, Ruhepuls, Gewicht und Trainings aus dem eigenen Google-Konto. Der Zugriff ist nur lesend.",
+    "Die Daten werden verschlüsselt übertragen, in einer Datenbank bei Cloudflare gespeichert und nur der angemeldeten Person selbst angezeigt. Sie werden nicht verkauft, nicht an Dritte weitergegeben und nicht für Werbung oder zum Trainieren von KI-Modellen verwendet.",
+    "Die Verbindung zu Google kann jederzeit in den Einstellungen der Anwendung getrennt werden. Dabei wird der Zugriff bei Google widerrufen. Gespeicherte Werte können in der Anwendung gelöscht werden.",
+    "Die Verwendung der von Google-Schnittstellen erhaltenen Daten entspricht der Google API Services User Data Policy, einschliesslich der Anforderungen zur eingeschränkten Nutzung.",
+  ])));
+  app.get("/nutzungsbedingungen", (c) => c.html(publicPage("Nutzungsbedingungen", [
+    "Diese Anwendung ist privat und steht nur ihrer Besitzerin oder ihrem Besitzer zur Verfügung. Eine Nutzung durch andere Personen ist nicht vorgesehen und nicht möglich.",
+    "Die Anwendung wird ohne Gewähr betrieben. Angezeigte Werte dienen der persönlichen Übersicht und ersetzen keine medizinische, finanzielle oder schulische Beratung.",
+  ])));
+
   // App-Symbole sind öffentlich: iOS lädt das Symbol für den Home-Bildschirm ohne Login-Cookie.
   app.get("/icons/*", (c) => (c.env.ASSETS ? c.env.ASSETS.fetch(c.req.raw) : serveStatic(c.env.STATIC, new URL(c.req.url).pathname)));
 
@@ -447,4 +461,10 @@ async function serveStatic(kv: KVNamespace | undefined, pathname: string): Promi
       "cache-control": key.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
     },
   });
+}
+
+/** Schlichte öffentliche Seite ohne Skripte und ohne persönliche Angaben. */
+function publicPage(title: string, paragraphs: string[]): string {
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  return `<!doctype html><html lang="de-CH"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${esc(title)}</title><style>body{margin:0;background:#000;color:#fff;font:17px/1.5 -apple-system,system-ui,sans-serif}main{max-width:640px;margin:0 auto;padding:64px 24px}h1{font-size:32px;letter-spacing:-.03em;margin:0 0 24px}p{color:rgba(235,235,245,.72);margin:0 0 16px}nav{margin-top:40px;display:flex;gap:20px;font-size:15px}a{color:#fff}</style></head><body><main><h1>${esc(title)}</h1>${paragraphs.map((p) => `<p>${esc(p)}</p>`).join("")}<nav><a href="/info">Start</a><a href="/datenschutz">Datenschutz</a><a href="/nutzungsbedingungen">Nutzungsbedingungen</a></nav></main></body></html>`;
 }
