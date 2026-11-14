@@ -242,7 +242,7 @@ export function useAddInvest() {
   return useOpt<S.InvestmentEntryCreate & { id: string }, S.InvestmentEntry[]>({
     key: keys.invest,
     fn: (b) => api.money.addInvest(b),
-    apply: (d, b) => [...d, { id: b.id, kind: b.kind, date: b.date, amount: b.amount, note: b.note ?? null }].sort((a, c) => a.date.localeCompare(c.date)),
+    apply: (d, b) => [...d.filter((e) => !(b.kind === "value" && e.kind === "value" && e.date === b.date && (e.estimated || e.note === "auto"))), { id: b.id, kind: b.kind, date: b.date, amount: b.amount, note: b.note ?? null, estimated: false }].sort((a, c) => a.date.localeCompare(c.date)),
   });
 }
 export function useRemoveInvest() {

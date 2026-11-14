@@ -320,6 +320,8 @@ export const investmentEntries = sqliteTable(
     date: text("date").notNull(),
     amount: real("amount").notNull(),
     note: text("note"),
+    // 1 = vom täglichen Lauf aus Kursen fortgeschrieben ("geschätzt"), 0 = von Hand oder genau berechnet
+    estimated: integer("estimated", { mode: "boolean" }).notNull().default(false),
     ...timestamps,
   },
   (t) => [index("investment_entries_date_idx").on(t.date), check("investment_entries_kind_chk", sql`${t.kind} in ('value','deposit')`)],

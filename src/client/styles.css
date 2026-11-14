@@ -14,7 +14,9 @@
   button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
   a { color: inherit; text-decoration: none; }
   /* Langes Drücken öffnet kein Vorschau- oder Kontextmenü des iPhones */
-  a, button, label, .press, .press-tab { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  /* Nichts in der Oberfläche lässt sich markieren; nur Eingabefelder bleiben auswählbar. */
+  body, body * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-select: text; }
   a, img, svg { -webkit-user-drag: none; }
   input, select, textarea { font: inherit; color: var(--fg); }
   :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 8px; }
@@ -230,6 +232,8 @@
   .fs-f { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; width: 100%; }
   .fs-ok { color: var(--fg2); font-size: var(--t-md); }
   .fs-note { color: var(--fg3); font-size: var(--t-xs); line-height: 1.4; margin: 14px 0 0; }
+  .viewpill { display: flex; padding: 2px 0 10px; }
+  .fs-gym { margin: 0 0 14px; }
   .fs-hint { color: var(--fg2); font-size: var(--t-md); margin: -6px 0 14px; }
   .cta { margin-top: 18px; width: 100%; min-height: 52px; border-radius: 99px; background: var(--fg); color: #000; font-weight: 600; font-size: var(--t-body); text-align: center; display: grid; place-items: center; }
   .cta.ghost { background: var(--card2); color: var(--fg); }
@@ -243,7 +247,7 @@
   textarea.inp { height: auto; padding: 10px 12px; min-height: 88px; width: 100%; resize: none; line-height: 1.35; }
   .field .inp { text-align: right; max-width: 60%; }
   .days { display: flex; gap: 2px; }
-  .days button { width: 44px; height: 44px; border-radius: 12px; background: var(--card2); color: var(--fg3); font-size: var(--t-xs); font-weight: 600; display: grid; place-items: center; text-align: center; padding: 0; transition: background 0.2s, color 0.2s; }
+  .days button { width: 44px; height: 44px; border-radius: 99px; background: var(--card2); color: var(--fg3); font-size: var(--t-xs); font-weight: 600; display: grid; place-items: center; text-align: center; padding: 0; transition: background 0.2s, color 0.2s; }
   .days button[aria-pressed="true"] { background: var(--fg); color: #000; }
   .spark { display: block; width: 72px; height: 24px; overflow: visible; }
   .spark path { fill: none; stroke: var(--fg); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -252,6 +256,8 @@
   .chart rect { fill: var(--fg); }
   .chart .base { stroke: var(--line); stroke-width: 1; }
   .chart path { fill: none; stroke: var(--fg); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .chart path.dot { stroke-width: 8; }
+  .axis { display: flex; justify-content: space-between; color: var(--fg3); font-size: var(--t-xs); padding-top: 6px; }
   .chart circle { fill: var(--fg); }
   .bigv { font-size: var(--t-big); font-weight: 700; letter-spacing: -0.035em; line-height: 1; }
   .bigv small { font-size: var(--t-lg); color: var(--fg2); font-weight: 600; letter-spacing: 0; margin-left: 4px; }
@@ -337,7 +343,7 @@
   .lrow .ic { width: 44px; height: 44px; border-radius: 50%; background: var(--card2); display: grid; place-items: center; font-size: var(--t-xs); font-weight: 700; }
   .lrow .ic svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
   .lrow .w { min-width: 0; }
-  .lrow .w b { display: block; font-size: var(--t-lg); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lrow .w b { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: var(--t-lg); font-weight: 600; overflow: hidden; overflow-wrap: anywhere; }
   .lrow .w span { font-size: var(--t-xs); color: var(--fg2); }
   .lrow .a { font-size: var(--t-lg); font-weight: 600; text-align: right; }
   .more { display: flex; justify-content: center; align-items: center; min-height: 52px; width: 100%; color: var(--fg); font-weight: 600; border-top: 1px solid var(--line); }

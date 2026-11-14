@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AbgleichLaeufe, VerbundeneApps } from "./einstellungen-apps";
 import { FitbitEinstellungen, FitbitLeer } from "./fitbit";
-import { Trainings } from "./fitbit-setup";
+import { Trainings } from "./trainings";
 import { ErinnerungenEinstellungen, KalenderEinstellungen } from "./einstellungen-kalender";
 import { addDays, dayCompact, daysBetween, daysUntil, mondayOf, minutesOf, timeInZone, monthLong, WEEKDAY_LETTERS, WEEK_ORDER, weekdayNum } from "../shared/dates";
 import { byCategory, ownShare } from "../shared/geld";
@@ -10,7 +10,7 @@ import { Link } from "./router";
 import { useSheet } from "./sheet";
 import { ExamSheet, PlanSheet } from "./sheets";
 import { HealthSheet } from "./sheets2";
-import { DepotSheet, CatIcon, MamaSheet, SpendChart, TxRow, monthTitle, useDepot, useMama } from "./geld";
+import { DepotSheet, CatIcon, MamaSheet, SpendChart, TxRow, monthTitle, pctText, useDepot, useMama } from "./geld";
 import { DayToggles, DetailHead, Empty, Icon, Money, RoundAction, PageTitle, nf, hm } from "./ui";
 import { GymCard } from "./cards";
 import { useMonthMoney, useLatest } from "./lib";
@@ -87,9 +87,9 @@ export function Geld() {
 
       <button type="button" className="card tap press" onClick={() => sheet.open(<DepotSheet />)}>
         <h2>Depot S&amp;P 500</h2>
-        <div style={{ paddingBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12 }}>
-          {dep.latest ? <Money v={dep.latest.amount} size={30} /> : <span className="muted" style={{ fontSize: 15 }}>Wert eintragen</span>}
-          {dep.gain !== null && dep.hasDeposits && <span className={dep.gain >= 0 ? "good" : "bad"} style={{ fontWeight: 600 }}><Money v={dep.gain} size={17} cur={false} signed /></span>}
+        <div style={{ paddingBottom: 14 }}>
+          {dep.latest ? <Money v={dep.latest.value} size={30} /> : <span className="muted" style={{ fontSize: 15 }}>Startbestand eintragen</span>}
+          {dep.latest && <div className={dep.latest.gain === 0 ? "muted" : dep.latest.gain > 0 ? "good" : "bad"} style={{ fontWeight: 600, fontSize: 15, marginTop: 2 }}><Money v={dep.latest.gain} size={17} cur={false} signed />{dep.pct !== null && <span style={{ marginLeft: 8 }}>{pctText(dep.pct)}</span>}</div>}
         </div>
       </button>
 

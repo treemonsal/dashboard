@@ -202,7 +202,7 @@ export function Aufgaben() {
         {chips.length > 0 && <div className="chips">{chips.map((c) => (<span key={String(c)}>{c}</span>))}</div>}
       </div>
       <div className="seg full" role="group" aria-label="Ansicht">
-        {([["eingang", "Eingang", lists.eingang.length], ["heute", "Heute", lists.heute.filter((t) => !t.doneAt).length], ["demnaechst", "Demnächst", lists.demnaechst.length], ["projekte", "Projekte", 0]] as [Seg, string, number][]).map(([k, l, n]) => (
+        {([["eingang", "Eingang", lists.eingang.length], ["heute", "Heute", lists.heute.filter((t) => !t.doneAt).length], ["demnaechst", "Demnächst", lists.demnaechst.length], ["projekte", "Projekte", all.filter((t) => t.projectId && !t.parentId && !t.doneAt).length]] as [Seg, string, number][]).map(([k, l, n]) => (
           <button key={k} type="button" className="press" aria-pressed={seg === k} onClick={() => setSeg(k)} >
             {l}{n > 0 && <span className="faint">{n}</span>}
           </button>
@@ -210,16 +210,18 @@ export function Aufgaben() {
       </div>
 
       {seg !== "demnaechst" && seg !== "projekte" && (
-        <div className="card" style={{ paddingTop: 0 }}>
-          {lists[seg].length === 0 ? <div className="empty">{seg === "eingang" ? "Nichts im Eingang." : "Nichts für heute."}</div> : lists[seg].map((t) => (<TaskLine key={t.id} task={t} today={today} />))}
-        </div>
+        lists[seg].length > 0 && (
+          <div className="card" style={{ paddingTop: 0 }}>
+            {lists[seg].map((t) => (<TaskLine key={t.id} task={t} today={today} />))}
+          </div>
+        )
       )}
-      {seg === "demnaechst" && (groups.length === 0 ? <div className="card"><div className="empty">Nichts geplant.</div></div> : groups.map(([date, list]) => (
+      {seg === "demnaechst" && groups.map(([date, list]) => (
         <div key={date} className="card" style={{ paddingTop: 0 }}>
           <h2>{dayCompact(date)}</h2>
           {list.map((t) => (<TaskLine key={t.id} task={t} today={today} />))}
         </div>
-      )))}
+      ))}
       {seg === "projekte" && (
         <>
           {projects.map((p) => {
@@ -231,7 +233,7 @@ export function Aufgaben() {
                   <div className="l"><b>{p.name}</b></div>
                   <span className="r">{list.length}</span>
                 </button>
-                {open && (list.length === 0 ? <div className="empty">Noch keine Aufgabe.</div> : list.map((t) => (<TaskLine key={t.id} task={t} today={today} />)))}
+                {open && list.map((t) => (<TaskLine key={t.id} task={t} today={today} />))}
               </div>
             );
           })}

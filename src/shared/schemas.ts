@@ -153,9 +153,14 @@ export const settingsUpdate = z
     salary: z.string().regex(/^\d{1,6}(\.\d{1,2})?$/),
     investMonthly: z.string().regex(/^\d{1,6}(\.\d{1,2})?$/),
     investStart: z.union([isoDate, z.literal("")]),
+    investDay: z.string().regex(/^([1-9]|1\d|2[0-8])$/),
+    investSymbol: z.string().trim().toUpperCase().regex(/^([A-Z0-9][A-Z0-9.\-]{0,11})?$/),
+    investShares: z.string().regex(/^(\d{1,7}(\.\d{1,6})?)?$/),
+    investCurrency: z.enum(["USD", "CHF", "EUR"]),
     mamaName: z.string().trim().max(60),
     hideHomework: z.enum(["0", "1"]),
     schoolHolidayUntil: z.union([isoDate, z.literal("")]),
+    workoutView: z.enum(["sport", "alle"]),
   })
   .partial()
   .strict();
@@ -553,6 +558,8 @@ export interface InvestmentEntry {
   date: string;
   amount: number;
   note: string | null;
+  /** Fortgeschrieben aus Kursen, nicht von Hand */
+  estimated: boolean;
 }
 
 /* ---------- Kalender (nur lesen) und Erinnerungen ---------- */

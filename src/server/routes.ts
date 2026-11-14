@@ -1,8 +1,9 @@
 // Routen der zweiten Ebene: Einstellungen, Lernplan, Gym, Geld, Körper, Export.
 import type { Hono } from "hono";
-import { and, asc, desc, eq, gte, inArray, isNull, like, lte, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, like, lte, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import * as schema from "./db/schema";
+import { updateDepot } from "./depot/run";
 import {
   SETTING_DEFAULTS,
   accountCreate,
@@ -362,15 +363,21 @@ export function registerExtra(api: Hono<AppEnv>) {
   });
 
   /* ---------- Depot (S&P 500): Werte und Einzahlungen von Hand ---------- */
+  const investOut = (r: typeof t.investmentEntries.$inferSelect) => ({ id: r.id, kind: r.kind, date: r.date, amount: r.amount, note: r.note, estimated: r.estimated });
   api.get("/invest", async (c) => {
     const rows = await c.var.db.select().from(t.investmentEntries).orderBy(asc(t.investmentEntries.date), asc(t.investmentEntries.createdAt));
-    return c.json(rows.map(({ id, kind, date, amount, note }) => ({ id, kind, date, amount, note })));
+    return c.json(rows.map(investOut));
   });
   api.post("/invest", v("json", investmentEntryCreate), async (c) => {
     const b = c.req.valid("json");
-    const r = await c.var.db.insert(t.investmentEntries).values({ ...b, id: b.id ?? newId() }).returning().get();
-    return c.json({ id: r.id, kind: r.kind, date: r.date, amount: r.amount, note: r.note }, 201);
+    // Ein von Hand eingetragener Wert ersetzt die vom Lauf geschriebene Zeile desselben Tages (nur diese).
+    if (b.kind === "value") {
+      await c.var.db.delete(t.investmentEntries).where(and(eq(t.investmentEntries.kind, "value"), eq(t.investmentEntries.date, b.date), or(eq(t.investmentEntries.estimated, true), eq(t.investmentEntries.note, "auto"))));
+    }
+    const r = await c.var.db.insert(t.investmentEntries).values({ ...b, id: b.id ?? newId(), estimated: false }).returning().get();
+    return c.json(investOut(r), 201);
   });
+  api.post("/depot/refresh", async (c) => c.json(await updateDepot(c.env)));
   api.delete("/invest/:id", v("param", idParam), async (c) => {
     const row = await c.var.db.delete(t.investmentEntries).where(eq(t.investmentEntries.id, c.req.valid("param").id)).returning({ id: t.investmentEntries.id }).get();
     return row ? c.json({ ok: true }) : notFound(c);

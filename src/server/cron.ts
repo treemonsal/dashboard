@@ -6,6 +6,7 @@ import * as schema from "./db/schema";
 import { syncCalendars } from "./calendar";
 import { sendDueReminders } from "./push";
 import { runHealthIfDue } from "./health/sync";
+import { runDepotIfDue } from "./depot/run";
 import type { Bindings } from "./util";
 
 export const CALENDAR_EVERY_MIN = 25;
@@ -27,5 +28,10 @@ export async function runScheduled(env: Bindings, now: Date = new Date()): Promi
     await runHealthIfDue(env, now);
   } catch (e) {
     console.error("Gesundheits-Abgleich fehlgeschlagen:", (e as Error)?.name ?? "unbekannt");
+  }
+  try {
+    await runDepotIfDue(env, now);
+  } catch (e) {
+    console.error("Depot-Abruf fehlgeschlagen:", (e as Error)?.name ?? "unbekannt");
   }
 }

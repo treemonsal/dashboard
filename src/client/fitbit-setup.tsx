@@ -1,10 +1,8 @@
-// Geführte Einrichtung von Fitbit (Blatt mit 7 Schritten) und Trainings aus Fitbit (Liste, Blatt, Hinweis im Trainingsblatt).
+// Geführte Einrichtung von Fitbit (Blatt mit 7 Schritten). Trainings stehen in trainings.tsx.
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { addDays, dayCompact, todayInZone } from "../shared/dates";
-import { ConfirmDelete, Icon, nf } from "./ui";
+import { ConfirmDelete, Icon } from "./ui";
 import { notify } from "./toast";
-import { useSheet } from "./sheet";
 
 export interface Status {
   configured: boolean;
@@ -191,87 +189,4 @@ export function FitbitSetupSheet({ connect }: { connect: { busy: boolean; start:
       <p className="fs-note">Falls Google wegen deines Alters kein Projekt zulässt: Ein Elternteil macht die Schritte 1 bis 5 im eigenen Google-Konto und trägt deine E-Mail als Testnutzer ein.</p>
     </div>
   );
-}
-
-/* ---------- Trainings ---------- */
-export interface WorkoutRow {
-  id: string;
-  day: string;
-  startAt: string;
-  endAt: string | null;
-  type: string;
-  name: string | null;
-  minutes: number | null;
-  kcal: number | null;
-  avgHr: number | null;
-}
-
-const TYPES: Record<string, string> = {
-  STRENGTH_TRAINING: "Krafttraining", WEIGHTLIFTING: "Krafttraining", RUN: "Laufen", RUNNING: "Laufen", WALK: "Gehen", WALKING: "Gehen",
-  BIKE: "Velo", BIKING: "Velo", CYCLING: "Velo", SWIM: "Schwimmen", SWIMMING: "Schwimmen", HIKE: "Wandern", HIKING: "Wandern",
-  WORKOUT: "Training", HIIT: "HIIT", YOGA: "Yoga", SPORT: "Sport", ELLIPTICAL: "Crosstrainer", TREADMILL: "Laufband",
-};
-export const isStrength = (w: { type: string }) => /STRENGTH|WEIGHT/i.test(w.type);
-export function workoutTitle(w: WorkoutRow): string {
-  const t = TYPES[w.type.toUpperCase()];
-  if (t) return t;
-  const raw = (w.name && w.name.trim()) || w.type.replace(/_/g, " ").toLowerCase();
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
-}
-const clock = (iso: string) => new Intl.DateTimeFormat("de-CH", { timeZone: "Europe/Zurich", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
-
-export const useWorkouts = (from: string, to: string) =>
-  useQuery({ queryKey: ["health-workouts", from, to], queryFn: () => call<WorkoutRow[]>("GET", `/workouts?from=${from}&to=${to}`) });
-
-export function WorkoutSheet({ w }: { w: WorkoutRow }) {
-  const Row = ({ k, v }: { k: string; v: string | null }) =>
-    v === null ? null : (
-      <div className="field">
-        <span>{k}</span>
-        <span className="rt">{v}</span>
-      </div>
-    );
-  return (
-    <div>
-      <h3>{workoutTitle(w)}</h3>
-      <div className="when">{dayCompact(w.day)} · {clock(w.startAt)}{w.endAt ? ` bis ${clock(w.endAt)}` : ""}</div>
-      <Row k="Dauer" v={w.minutes !== null ? `${w.minutes} Min` : null} />
-      <Row k="Kalorien" v={w.kcal !== null ? `${nf(w.kcal)} kcal` : null} />
-      <Row k="Puls" v={w.avgHr !== null ? `${w.avgHr} bpm` : null} />
-      <Row k="Quelle" v="Fitbit" />
-    </div>
-  );
-}
-
-/** Letzte Trainings aus Fitbit im Körper-Tab. Ohne Trainings: nichts. */
-export function Trainings() {
-  const sheet = useSheet();
-  const today = todayInZone();
-  const q = useWorkouts(addDays(today, -60), today);
-  const list = [...(q.data ?? [])].reverse().slice(0, 5);
-  if (list.length === 0) return null;
-  return (
-    <div className="card">
-      <h2>Trainings</h2>
-      {list.map((w) => (
-        <button key={w.id} type="button" className="lrow press" onClick={() => sheet.open(<WorkoutSheet w={w} />)}>
-          <span className="ic"><Icon n="dumbbell" /></span>
-          <span className="w">
-            <b>{workoutTitle(w)}</b>
-            <span>{dayCompact(w.day)}</span>
-          </span>
-          <span className="a muted" style={{ fontSize: 14 }}>{w.minutes !== null ? `${w.minutes} Min` : ""}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** Hinweis im Trainingsblatt: Fitbit hat an diesem Tag Krafttraining erkannt. Zählt nicht als Gym. */
-export function FitbitHinweis({ day }: { day: string }) {
-  const q = useWorkouts(day, day);
-  const w = (q.data ?? []).filter(isStrength);
-  if (w.length === 0) return null;
-  const min = w.reduce((a, x) => a + (x.minutes ?? 0), 0);
-  return <div className="fs-hint">Fitbit hat Krafttraining erkannt{min ? ` · ${min} Min` : ""}</div>;
 }

@@ -71,7 +71,7 @@ export function HealthSheet({ metric }: { metric: Metric }) {
   const min = Math.min(...have, max);
   const W = 300, H = 130;
   const bw = W / range;
-  const wpts = vals.map((v, i) => (v === null ? null : [(i + 0.5) * bw, H - 10 - ((v - min) / (max - min || 1)) * (H - 24)] as const)).filter((p): p is readonly [number, number] => p !== null);
+  const wpts = vals.map((v, i) => (v === null ? null : [(i + 0.5) * bw, max === min ? H / 2 : H - 10 - ((v - min) / (max - min)) * (H - 24)] as const)).filter((p): p is readonly [number, number] => p !== null);
   const empty = have.length === 0;
   const w = parseFloat(kg.replace(",", "."));
   return (
@@ -79,7 +79,7 @@ export function HealthSheet({ metric }: { metric: Metric }) {
       <h3>{cfg.title}</h3>
       <Segments value={range} onChange={setRange} options={[{ v: 7, label: "7 Tage" }, { v: 30, label: "30" }, { v: 90, label: "90" }]} label="Zeitraum" />
       {empty ? (
-        <div className="empty" style={{ paddingTop: 18 }}>{metric === "weight" ? "Noch kein Gewicht eingetragen." : "Noch nicht mit Fitbit verbunden."}</div>
+        <div className="empty" style={{ paddingTop: 18 }}>{metric === "weight" ? (h.rows.length ? "Kein Gewicht in diesem Zeitraum." : "Noch kein Gewicht eingetragen.") : "Noch nicht mit Fitbit verbunden."}</div>
       ) : (
         <>
           <div style={{ margin: "16px 0 6px" }}>
@@ -91,11 +91,13 @@ export function HealthSheet({ metric }: { metric: Metric }) {
             {cfg.line ? (
               <>
                 <path d={wpts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join("")} vectorEffect="non-scaling-stroke" />
+                {wpts.length > 0 && <path className="dot" d={`M${wpts.at(-1)![0].toFixed(1)} ${wpts.at(-1)![1].toFixed(1)}h0`} vectorEffect="non-scaling-stroke" />}
               </>
             ) : (
               vals.map((v, i) => v !== null && <rect key={days[i]} x={i * bw + bw * 0.15} width={bw * 0.7} y={H - (v / max) * (H - 6)} height={(v / max) * (H - 6)} rx={Math.min(3, bw / 3)} />)
             )}
           </svg>
+          <div className="axis"><span>{dayCompact(days[0])}</span><span>{dayCompact(days[days.length - 1])}</span></div>
         </>
       )}
       {metric === "weight" && (
@@ -110,7 +112,6 @@ export function HealthSheet({ metric }: { metric: Metric }) {
           <button type="button" className="cta press" disabled={!(w >= 20 && w <= 400)} onClick={() => { put.mutate({ day: today, patch: { weightKg: Math.round(w * 10) / 10 } }); setKg(""); }}>Eintragen</button>
         </>
       )}
-      <span hidden>{dayCompact(today)}</span>
     </div>
   );
 }

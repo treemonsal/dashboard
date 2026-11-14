@@ -1,8 +1,11 @@
 // Geld: Ausgaben, Buchungen, Konten, Depot, offene Rückzahlungen der Mutter.
 import { useMemo, useState } from "react";
-import { addDays, dayCompact, daysBetween, monthLong, todayInZone } from "../shared/dates";
-import { byCategory, depositTotal, mamaBalance, ownShare } from "../shared/geld";
-import type { Category, InvestmentEntry, Transaction } from "../shared/schemas";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "./api";
+import { addDays, dayCompact, daysBetween, monthLong } from "../shared/dates";
+import { byCategory, mamaBalance, ownShare } from "../shared/geld";
+import { depotRules, depotState, toDepotEntry } from "../shared/depot";
+import type { Category, Transaction } from "../shared/schemas";
 import { useSheet } from "./sheet";
 import { notify } from "./toast";
 import { Icon, Money, nf } from "./ui";
@@ -160,21 +163,22 @@ export function MamaSheet() {
 export function useDepot() {
   const entries = useInvest().data ?? [];
   const s = useSettings();
-  const today = useToday();
-  const values = entries.filter((e) => e.kind === "value");
-  const latest = values.at(-1) ?? null;
-  const extra = entries.filter((e) => e.kind === "deposit").reduce((a, e) => a + e.amount, 0);
-  const deposits = depositTotal({ monthly: Number(s.investMonthly), start: s.investStart, today, extra });
-  return { entries, values, latest, deposits, gain: latest ? latest.amount - deposits : null, hasDeposits: deposits > 0 };
+  return useMemo(() => {
+    const st = depotState(entries.map((e) => toDepotEntry(e)), depotRules(s));
+    const latest = st.latest ? { ...st.latest, amount: st.latest.value } : null;
+    return { entries, st, series: st.series, latest, deposits: st.deposited, gain: st.gain, pct: st.pct, hasDeposits: st.deposited > 0 };
+  }, [entries, s]);
 }
 
-export function ValueLine({ values }: { values: InvestmentEntry[] }) {
+export const pctText = (p: number) => `${p > 0 ? "+" : p < 0 ? "−" : ""}${nf(Math.abs(p), 1)} %`;
+
+export function ValueLine({ values }: { values: { date: string; value: number }[] }) {
   if (values.length < 2) return null;
   const W = 300, H = 120;
-  const min = Math.min(...values.map((v) => v.amount)), max = Math.max(...values.map((v) => v.amount));
+  const min = Math.min(...values.map((v) => v.value)), max = Math.max(...values.map((v) => v.value));
   const span = max - min || 1;
-  const t0 = Date.parse(values[0].date), t1 = Date.parse(values.at(-1)!.date) || t0 + 1;
-  const pts = values.map((v) => [((Date.parse(v.date) - t0) / (t1 - t0 || 1)) * W, H - 8 - ((v.amount - min) / span) * (H - 16)] as const);
+  const t0 = Date.parse(values[0]!.date), t1 = Date.parse(values.at(-1)!.date) || t0 + 1;
+  const pts = values.map((v) => [((Date.parse(v.date) - t0) / (t1 - t0 || 1)) * W, H - 8 - ((v.value - min) / span) * (H - 16)] as const);
   return (
     <svg className="chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label="Verlauf des Depotwerts">
       <path d={pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join("")} vectorEffect="non-scaling-stroke" />
@@ -188,33 +192,64 @@ export function DepotSheet() {
   const setS = useSetSetting();
   const add = useAddInvest();
   const rem = useRemoveInvest();
+  const qc = useQueryClient();
   const today = useToday();
   const [val, setVal] = useState("");
   const [vd, setVd] = useState(today);
   const [dep, setDep] = useState("");
+  const [dd, setDd] = useState(today);
+  const [busy, setBusy] = useState(false);
   const parse = (x: string) => { const n = parseFloat(x.replace(",", ".")); return Number.isFinite(n) && n >= 0 ? n : null; };
+  const hand = d.entries.filter((e) => !e.estimated && e.note !== "auto");
+  const first = d.st.start;
+  const exact = !!s.investSymbol && Number(s.investShares) > 0;
+  async function refresh() {
+    setBusy(true);
+    try {
+      const r = await api.money.depotRefresh();
+      notify(r.message);
+      void qc.invalidateQueries({ queryKey: ["invest"] });
+    } catch {
+      notify("Abruf nicht möglich");
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <div>
       <h3>Depot S&amp;P 500</h3>
-      <div className="when">{d.latest ? `Stand ${dayCompact(d.latest.date)}` : "Noch kein Wert eingetragen"}</div>
-      {d.latest ? <Money v={d.latest.amount} size={38} /> : <div className="bigv faint">–</div>}
-      <ValueLine values={d.values} />
-      <div className="row"><div className="l"><b>Einzahlungen</b></div><span className="r"><Money v={d.deposits} size={17} cur={false} /></span></div>
-      <div className="row"><div className="l"><b>Gewinn / Verlust</b></div>
-        <span className={`r ${d.gain === null ? "" : d.gain >= 0 ? "good" : "bad"}`}>{d.gain === null ? "–" : <Money v={d.gain} size={17} cur={false} signed />}</span></div>
-      <div className="sec">Wert eintragen</div>
+      <div className="when">{d.latest ? `Stand ${dayCompact(d.latest.date)}${d.latest.estimated ? " · geschätzt" : ""}` : "Startbestand eintragen"}</div>
+      {d.latest ? <Money v={d.latest.value} size={38} /> : <div className="bigv faint">–</div>}
+      {d.latest && (
+        <div className={d.latest.gain === 0 ? "muted" : d.latest.gain > 0 ? "good" : "bad"} style={{ fontWeight: 600, marginTop: 2 }}>
+          <Money v={d.latest.gain} size={17} cur={false} signed />{d.pct !== null && <span style={{ marginLeft: 8 }}>{pctText(d.pct)}</span>}
+        </div>
+      )}
+      <ValueLine values={d.series} />
+      {d.latest && <div className="row"><div className="l"><b>Einbezahlt</b></div><span className="r"><Money v={d.deposits} size={17} cur={false} /></span></div>}
+      <div className="sec">{first ? "Neuer Wert" : "Startbestand"}</div>
       <div className="field"><label htmlFor="d-v">Betrag</label><input id="d-v" className="inp num" style={{ width: 110 }} inputMode="decimal" value={val} onChange={(e) => setVal(e.target.value)} /></div>
       <div className="field"><label htmlFor="d-d">Datum</label><input id="d-d" className="inp" type="date" value={vd} onChange={(e) => setVd(e.target.value)} /></div>
-      <button type="button" className="cta press" disabled={parse(val) === null || !vd} onClick={() => { add.mutate({ id: uid(), kind: "value", date: vd, amount: parse(val)! }); setVal(""); }}>Wert speichern</button>
+      <button type="button" className="cta press" disabled={parse(val) === null || !vd} onClick={() => { add.mutate({ id: uid(), kind: "value", date: vd, amount: parse(val)! }); setVal(""); }}>{first ? "Wert speichern" : "Startbestand speichern"}</button>
       <div className="sec">Einzahlungen</div>
-      <div className="field"><label htmlFor="d-s">Erste Einzahlung am</label><input id="d-s" className="inp" type="date" defaultValue={s.investStart} onChange={(e) => setS({ investStart: e.target.value })} /></div>
       <div className="field"><label htmlFor="d-m">Pro Monat</label><input id="d-m" className="inp num" inputMode="decimal" defaultValue={s.investMonthly} onBlur={(e) => { const n = parse(e.target.value); if (n !== null && String(n) !== s.investMonthly) setS({ investMonthly: String(n) }); }} /></div>
-      <div className="field"><label htmlFor="d-e">Bisher eingezahlt (einmalig)</label><input id="d-e" className="inp num" style={{ width: 110 }} inputMode="decimal" value={dep} onChange={(e) => setDep(e.target.value)} /></div>
-      <button type="button" className="cta ghost press" disabled={parse(dep) === null || !dep} onClick={() => { add.mutate({ id: uid(), kind: "deposit", date: todayInZone(), amount: parse(dep)!, note: "von Hand" }); setDep(""); }}>Einzahlung eintragen</button>
-      {d.entries.length > 0 && <div className="sec">Einträge</div>}
-      {[...d.entries].reverse().map((e) => (
+      <div className="field"><label htmlFor="d-t">Am</label><input id="d-t" className="inp num" style={{ width: 70 }} inputMode="numeric" defaultValue={s.investDay} onBlur={(e) => { const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 28 && String(n) !== s.investDay) setS({ investDay: String(n) }); else e.target.value = s.investDay; }} /></div>
+      <div className="field"><label htmlFor="d-e">Nachtragen</label><input id="d-e" className="inp num" style={{ width: 110 }} inputMode="decimal" value={dep} onChange={(e) => setDep(e.target.value)} /></div>
+      <div className="field"><label htmlFor="d-ed">Datum</label><input id="d-ed" className="inp" type="date" value={dd} onChange={(e) => setDd(e.target.value)} /></div>
+      <button type="button" className="cta ghost press" disabled={parse(dep) === null || !dep || !dd} onClick={() => { add.mutate({ id: uid(), kind: "deposit", date: dd, amount: parse(dep)!, note: "von Hand" }); setDep(""); }}>Einzahlung eintragen</button>
+      <div className="sec">Genau rechnen</div>
+      <div className="field"><label htmlFor="d-k">Kürzel</label><input id="d-k" className="inp" style={{ width: 110 }} autoCapitalize="characters" defaultValue={s.investSymbol} placeholder="z.B. VOO" onBlur={(e) => { const v = e.target.value.trim().toUpperCase(); if (v !== s.investSymbol) setS({ investSymbol: v }); }} /></div>
+      <div className="field"><label htmlFor="d-a">Anteile</label><input id="d-a" className="inp num" style={{ width: 110 }} inputMode="decimal" defaultValue={s.investShares} onBlur={(e) => { const n = parse(e.target.value); const v = n === null ? "" : String(n); if (v !== s.investShares) setS({ investShares: v }); }} /></div>
+      <div className="field"><label htmlFor="d-w">Währung</label>
+        <select id="d-w" className="inp" value={s.investCurrency} onChange={(e) => setS({ investCurrency: e.target.value as "USD" | "CHF" | "EUR" })}>
+          <option value="USD">USD</option><option value="CHF">CHF</option><option value="EUR">EUR</option>
+        </select></div>
+      <div className="when" style={{ marginTop: 6 }}>{exact ? "Wert = Anteile mal Kurs" : "Ohne Anteile wird geschätzt"}</div>
+      <button type="button" className="cta ghost press" disabled={busy || !first} onClick={refresh}>Jetzt abrufen</button>
+      {hand.length > 0 && <div className="sec">Einträge</div>}
+      {[...hand].reverse().map((e) => (
         <div key={e.id} className="row">
-          <div className="l"><b>{e.kind === "value" ? "Wert" : "Einzahlung"} · <Money v={e.amount} size={16} cur={false} /></b><span>{dayCompact(e.date)}</span></div>
+          <div className="l"><b>{e.kind === "deposit" ? "Einzahlung" : first && e.date === first.date && e.amount === first.amount ? "Startbestand" : "Wert"} · <Money v={e.amount} size={16} cur={false} /></b><span>{dayCompact(e.date)}</span></div>
           <button type="button" className="iconbtn press" aria-label="Eintrag löschen" onClick={() => rem.mutate(e.id)}><Icon n="trash" /></button>
         </div>
       ))}

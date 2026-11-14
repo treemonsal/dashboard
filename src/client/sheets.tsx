@@ -9,7 +9,7 @@ import { navigate } from "./router";
 import { CheckMark, ConfirmDelete, DayToggles, Icon, Segments, Spark, nf } from "./ui";
 import { SwipeRow } from "./swipe";
 import { useDay } from "./day";
-import { FitbitHinweis } from "./fitbit-setup";
+import { FitbitHinweis } from "./trainings";
 import type { Suggestion } from "../shared/vorschlag";
 import { subjectAverages } from "./lib";
 import {

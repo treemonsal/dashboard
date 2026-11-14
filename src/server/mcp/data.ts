@@ -4,7 +4,8 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, like, lte, or, sql
 import * as t from "../db/schema";
 import { SETTING_DEFAULTS, type Settings } from "../../shared/settings";
 import { MIN_SUBJECT, TARGET_AVERAGE, neededGrade, overallAverage, subjectMarks, weightedAverage, type Needed } from "../../shared/calc";
-import { budgetOf, byCategory, depositTotal, mamaBalance, monthSummary } from "../../shared/geld";
+import { budgetOf, byCategory, mamaBalance, monthSummary } from "../../shared/geld";
+import { depotRules, depotState, toDepotEntry } from "../../shared/depot";
 import { addDays, daysUntil, mondayOf, timeInZone, todayInZone, weekdayLong, weekdayNum, zoneMidnightUtc } from "../../shared/dates";
 import { newId, nowIso, type Db } from "../util";
 import { visibleEvents } from "../../shared/agenda";
@@ -406,9 +407,7 @@ export async function moneySummary(db: Db, month?: string) {
   const summary = monthSummary(monthTx, budget);
   const mama = mamaBalance(allTx);
   const entries = await db.select().from(t.investmentEntries).orderBy(asc(t.investmentEntries.date), asc(t.investmentEntries.createdAt));
-  const latest = entries.filter((e) => e.kind === "value").at(-1) ?? null;
-  const extra = entries.filter((e) => e.kind === "deposit").reduce((a, e) => a + e.amount, 0);
-  const deposits = depositTotal({ monthly: Number(settings.investMonthly), start: settings.investStart, today, extra });
+  const depot = depotState(entries.map(toDepotEntry), depotRules(settings));
   const accounts = await db
     .select({
       name: t.accounts.name,
@@ -428,7 +427,7 @@ export async function moneySummary(db: Db, month?: string) {
     byCategory: byCategory(monthTx).slice(0, 12).map((c) => ({ category: c.categoryId ? (cats.get(c.categoryId) ?? "Unbekannt") : "Ohne Kategorie", amount: c.amount })),
     openFromMama: mama.open,
     openMeals: mama.meals.filter((x) => x.status !== "settled").length,
-    depot: { value: latest?.amount ?? null, valueDate: latest?.date ?? null, deposits, gain: latest ? r2(latest.amount - deposits) : null },
+    depot: { value: depot.latest?.value ?? null, valueDate: depot.latest?.date ?? null, estimated: depot.latest?.estimated ?? false, deposits: depot.deposited, gain: depot.gain, gainPercent: depot.pct },
     accounts: accounts.map((a) => ({ name: a.name, currency: a.currency, balance: r2(a.balance) })),
     hinweis: "Nur Zusammenfassungen. Einzelbuchungen und Gegenparteien gibt dieser Connector nicht heraus.",
   };

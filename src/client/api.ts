@@ -100,6 +100,7 @@ export const api = {
     invest: () => get<S.InvestmentEntry[]>("/invest"),
     addInvest: (b: S.InvestmentEntryCreate) => post<S.InvestmentEntry>("/invest", b),
     removeInvest: (id: string) => del(`/invest/${id}`),
+    depotRefresh: () => post<{ ok: boolean; message: string; added: number }>("/depot/refresh", {}),
   },
   health: {
     list: (from: string, to: string) => get<S.HealthDay[]>(`/health?from=${from}&to=${to}`),

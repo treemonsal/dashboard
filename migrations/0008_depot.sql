@@ -1,0 +1,1 @@
+ALTER TABLE `investment_entries` ADD `estimated` integer DEFAULT false NOT NULL;
