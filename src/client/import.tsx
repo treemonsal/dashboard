@@ -40,7 +40,6 @@ export function UploadAction() {
       <i>
         <Icon n="upload" />
       </i>
-      Export
       <input ref={input} type="file" multiple accept=".csv,.txt,text/csv,text/plain,application/vnd.ms-excel" onChange={pick} aria-label="Bank-Export hochladen"
         style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }} />
     </label>

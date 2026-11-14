@@ -12,6 +12,22 @@ for (const ev of ["pointerup", "pointercancel", "lostpointercapture", "dragstart
 // iOS Safari: :active und Touch-Rückmeldung brauchen einen Touch-Listener am Dokument.
 document.addEventListener("touchstart", () => {}, { passive: true });
 
+// Tastatur: Beim Tippen tritt die Leiste zurück und Eingabe oder Blatt sitzen direkt über der Tastatur.
+// --kb ist die Höhe, die die Tastatur vom sichtbaren Bereich wegnimmt.
+const vv = window.visualViewport;
+const setKb = () => {
+  const kb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  document.documentElement.style.setProperty("--kb", `${Math.round(kb)}px`);
+};
+vv?.addEventListener("resize", setKb);
+vv?.addEventListener("scroll", setKb);
+const isText = (el: EventTarget | null) =>
+  el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && !["checkbox", "radio", "file", "button", "submit", "range", "date", "time"].includes(el.type));
+document.addEventListener("focusin", (e) => { if (isText(e.target)) { document.documentElement.classList.add("typing"); setKb(); } });
+document.addEventListener("focusout", (e) => { if (isText(e.target)) setTimeout(() => { if (!isText(document.activeElement)) document.documentElement.classList.remove("typing"); }, 50); });
+// Kein Kontextmenü des Systems bei langem Drücken auf Knöpfe und Verweise.
+document.addEventListener("contextmenu", (e) => { if ((e.target as Element | null)?.closest?.("a, button, label, .press")) e.preventDefault(); });
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: true } },
 });

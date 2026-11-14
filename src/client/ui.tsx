@@ -27,6 +27,9 @@ const P: Record<string, string> = {
   film: "M5 5h14v14H5zM5 9h14M5 15h14M9 5v14M15 5v14",
   dots: "M6 12h.01M12 12h.01M18 12h.01",
   check: "M4.5 12.5 9.5 17.5 19.5 6.5",
+  bars: "M18 20V10M12 20V4M6 20v-6",
+  trend: "M22 7l-8.5 8.5-5-5L2 17M16 7h6v6",
+  person: "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z",
 };
 
 export function Icon({ n, className }: { n: keyof typeof P | string; className?: string }) {
@@ -186,15 +189,14 @@ export function RoundAction({ icon, label, onClick, href }: { icon: string; labe
       <i>
         <Icon n={icon} />
       </i>
-      {label}
     </>
   );
   return href ? (
-    <Link href={href} className="act press">
+    <Link href={href} className="act press" aria-label={label}>
       {inner}
     </Link>
   ) : (
-    <button type="button" className="act press" onClick={onClick}>
+    <button type="button" className="act press" onClick={onClick} aria-label={label}>
       {inner}
     </button>
   );
