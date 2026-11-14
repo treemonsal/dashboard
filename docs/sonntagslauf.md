@@ -46,3 +46,20 @@ Liest jeden Sonntagabend die Noten aus dem KVZ-Portal und trägt Neues über den
 - Stundenplan: https://www.kvz-schule.ch/login/stundenplan (Wochenansicht mit Fach, Zimmer, Lehrperson). Auslese-Skript noch offen, siehe Schritt 6.
 - Das Schulkonto ist im Profil auch bei Microsoft 365 angemeldet. Die Klassennotizbücher liegen in den Teams der Klasse; onenote.com zeigt sie nicht direkt. Prüfungslisten aus den Notizbüchern sind noch nicht automatisiert.
 - Englisch beginnt freitags 07:30 (die Kalendereinträge 06:30 waren eine Stunde zu früh).
+
+## Stundenplan auslesen (geprüft am 14.11.2026, 19 Lektionen, Do und Fr)
+Seite https://www.kvz-schule.ch/login/stundenplan, Wochenansicht (FullCalendar). Skript:
+
+```js
+(() => {
+  const cols = [...document.querySelectorAll('.fc-content-skeleton td')].filter(td => !td.classList.contains('fc-axis'));
+  const out = [];
+  cols.forEach((td, i) => td.querySelectorAll('.fc-time-grid-event').forEach(ev => {
+    const time = (ev.querySelector('.fc-time')?.getAttribute('data-full') || ev.querySelector('.fc-time')?.textContent || '').trim();
+    out.push({weekday: i + 1, time, title: (ev.querySelector('.fc-title')?.textContent || '').replace(/\s+/g,' ').trim()});
+  }));
+  return JSON.stringify(out);
+})()
+```
+
+`weekday` 1 ist Montag (Spalte der Woche). `time` hat die Form "07.30 - 08.15", `title` die Form "FRW, LI208 (Nicole Widmer)"; bei Sport fehlt das Zimmer ("S, (Name)", Kürzel S entspricht dem Fach Sport). Eine Ferienwoche zeigt keine Lektionen: dann den Stundenplan NICHT ersetzen. Nur ersetzen, wenn mindestens 10 Lektionen gelesen wurden und sie sich vom gespeicherten Stundenplan unterscheiden.
