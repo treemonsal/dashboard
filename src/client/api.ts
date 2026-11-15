@@ -129,6 +129,7 @@ export const api = {
     addInvest: (b: S.InvestmentEntryCreate) => post<S.InvestmentEntry>("/invest", b),
     removeInvest: (id: string) => del(`/invest/${id}`),
     depotKurse: () => get<{ symbol: string; close: number | null; date: string | null; fx: number | null }[]>("/depot/kurse"),
+    depotBuys: () => get<{ symbol: string; shares: number; buyDate: string; depositDate: string; late: boolean }[]>("/depot/buys"),
     depotRefresh: () => post<{ ok: boolean; message: string; added: number }>("/depot/refresh", {}),
   },
   health: {

@@ -26,6 +26,7 @@ export const keys = {
   categories: ["categories"] as const,
   tx: (m: string) => ["tx", m] as const,
   invest: ["invest"] as const,
+  depotBuys: ["depot-buys"] as const,
   health: (from: string, to: string) => ["health", from, to] as const,
   calendars: ["calendars"] as const,
   events: (from: string, to: string) => ["events", from, to] as const,
@@ -247,15 +248,17 @@ export const useCategories = () => useQuery({ queryKey: keys.categories, queryFn
 export const useTransactions = (month: string) => useQuery({ queryKey: keys.tx(month), queryFn: () => api.money.transactions(month) });
 export const useAllTransactions = () => useQuery({ queryKey: keys.tx("all"), queryFn: () => api.money.transactions() });
 export const useInvest = () => useQuery({ queryKey: keys.invest, queryFn: api.money.invest });
+export const useDepotBuys = () => useQuery({ queryKey: keys.depotBuys, queryFn: api.money.depotBuys });
 export function useAddInvest() {
   return useOpt<S.InvestmentEntryCreate & { id: string }, S.InvestmentEntry[]>({
     key: keys.invest,
+    also: [keys.depotBuys],
     fn: (b) => api.money.addInvest(b),
     apply: (d, b) => [...d.filter((e) => !(b.kind === "value" && e.kind === "value" && e.date === b.date && (e.estimated || e.note === "auto"))), { id: b.id, kind: b.kind, date: b.date, amount: b.amount, note: b.note ?? null, estimated: false }].sort((a, c) => a.date.localeCompare(c.date)),
   });
 }
 export function useRemoveInvest() {
-  return useOpt<string, S.InvestmentEntry[]>({ key: keys.invest, fn: (id) => api.money.removeInvest(id), apply: (d, id) => d.filter((e) => e.id !== id) });
+  return useOpt<string, S.InvestmentEntry[]>({ key: keys.invest, also: [keys.depotBuys], fn: (id) => api.money.removeInvest(id), apply: (d, id) => d.filter((e) => e.id !== id) });
 }
 export function useUpdateTx() {
   return useOpt<{ id: string; patch: Record<string, unknown> }, S.Transaction[]>({

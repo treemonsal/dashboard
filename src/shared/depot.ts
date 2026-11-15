@@ -59,9 +59,10 @@ function monthDate(y: number, m: number, day: number): string {
 /** Anzahl Stichtage der monatlichen Einzahlung in den Monaten nach dem Startmonat bis und mit `date`. */
 export function monthlyCount(startDate: string, date: string, day: number): number {
   if (!DATE_RE.test(startDate) || !DATE_RE.test(date)) return 0;
+  // Erste Rate: Stichtag im Startmonat, falls er nach dem Startwert liegt, sonst im Folgemonat.
   let y = Number(startDate.slice(0, 4));
-  let m = Number(startDate.slice(5, 7)) + 1;
-  if (m > 12) { m = 1; y++; }
+  let m = Number(startDate.slice(5, 7));
+  if (monthDate(y, m, day) <= startDate) { m++; if (m > 12) { m = 1; y++; } }
   let n = 0;
   while (monthDate(y, m, day) <= date) {
     n++;
@@ -299,8 +300,8 @@ export function depositsAfter(entries: DepotEntry[], rules: DepotRules, upTo: st
   const out: DepotDeposit[] = [];
   if (rules.monthly > 0) {
     let y = Number(s.date.slice(0, 4));
-    let m = Number(s.date.slice(5, 7)) + 1;
-    if (m > 12) { m = 1; y++; }
+    let m = Number(s.date.slice(5, 7));
+    if (monthDate(y, m, rules.day) <= s.date) { m++; if (m > 12) { m = 1; y++; } }
     for (let i = 0; i < 1200; i++) {
       const date = monthDate(y, m, rules.day);
       if (date > upTo) break;

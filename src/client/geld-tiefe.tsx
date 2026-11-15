@@ -16,7 +16,7 @@ import type { Category, Transaction } from "../shared/schemas";
 import { Money, Icon, nf } from "./ui";
 import { navigate } from "./router";
 import { NotFound, Stage, monthName, type Crumb } from "./tiefe";
-import { CatIcon, DepotSheet, SpendChart, TxRow, pctText, useDepot } from "./geld";
+import { CatIcon, DepositSheet, DepotSheet, SpendChart, TxRow, pctText, useBought, useDepot } from "./geld";
 import { useSheet } from "./sheet";
 import { useAccounts, useAllTransactions, useCategories, useSettings, useToday, useUpdateTx } from "./queries";
 import { api } from "./api";
@@ -364,7 +364,8 @@ function Depot({ segs }: { segs: string[] }) {
   const s = useSettings();
   const sheet = useSheet();
   const kurse = useKurse();
-  const holdings = depotHoldings(s) ?? [];
+  const bought = useBought();
+  const holdings = (depotHoldings(s) ?? []).map((h) => ({ ...h, shares: h.shares + (bought[h.symbol] ?? 0), calc: (bought[h.symbol] ?? 0) > 0 }));
   const series = dep.series;
   if (segs[1] === "stand") {
     const date = segs[2] ?? "";
@@ -397,7 +398,7 @@ function Depot({ segs }: { segs: string[] }) {
           <span className="lbl">{prod.name}</span>
         </div>
         <div className="card" style={{ paddingTop: 0 }}>
-          <div className="kv"><span>Anteile</span><span>{nf(h.shares, 2)}</span></div>
+          <div className="kv"><span>Anteile</span><span>{h.calc ? "≈ " : ""}{nf(h.shares, 2)}</span></div>
           <div className="kv"><span>Kurs</span><span>{q?.close != null ? `${nf(q.close, 2)} EUR${q.date ? ` · ${day(q.date)}` : ""}` : kurse.isPending ? "…" : "nicht abrufbar"}</span></div>
           {q?.fx != null && <div className="kv"><span>Wechselkurs</span><span>{nf(q.fx, 4)} CHF je EUR</span></div>}
           <div className="kv"><span>Index</span><span>{prod.index}</span></div>
@@ -424,7 +425,7 @@ function Depot({ segs }: { segs: string[] }) {
           return (
             <Link key={h.symbol} href={`/geld/depot/${h.symbol}`} className="lrow press">
               <span className="ic">{h.symbol.slice(0, 2)}</span>
-              <span className="w"><b>{h.symbol}</b><span>{nf(h.shares, 2)} Anteile</span></span>
+              <span className="w"><b>{h.symbol}</b><span>{h.calc ? "≈ " : ""}{nf(h.shares, 2)} Anteile</span></span>
               <span className="a">{value !== null ? <Money v={value} size={17} cur={false} /> : <span className="faint">–</span>}<Icon n="chev" className="go" /></span>
             </Link>
           );
@@ -441,7 +442,8 @@ function Depot({ segs }: { segs: string[] }) {
           ))}
         </div>
       )}
-      <button type="button" className="cta ghost press" style={{ marginTop: 0 }} onClick={() => sheet.open(<DepotSheet />)}>Eintragen</button>
+      <button type="button" className="cta press" style={{ marginTop: 0 }} onClick={() => sheet.open(<DepositSheet />)}>Einzahlung</button>
+      <button type="button" className="cta ghost press" onClick={() => sheet.open(<DepotSheet />)}>Eintragen</button>
     </Stage>
   );
 }

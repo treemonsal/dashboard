@@ -6,13 +6,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import { addDays, dayCompact, daysBetween, monthLong } from "../shared/dates";
 import { byCategory, mamaBalance, ownShare } from "../shared/geld";
-import { CONFIRMED_HOLDINGS, depotHoldings, PORTFOLIO_PRODUCTS, portfolioProduct, depotRules, depotState, toDepotEntry } from "../shared/depot";
+import { CONFIRMED_HOLDINGS, depotHoldings, depotSplit, PORTFOLIO_PRODUCTS, portfolioProduct, depotRules, depotState, toDepotEntry } from "../shared/depot";
 import type { Category, Transaction } from "../shared/schemas";
 import { useSheet } from "./sheet";
 import { ProvDot, isProvisional } from "./laufend";
 import { notify } from "./toast";
 import { Icon, Money, nf } from "./ui";
-import { useAddInvest, useAllTransactions, useInvest, useRemoveInvest, useSetSetting, useSettings, useToday } from "./queries";
+import { useAddInvest, useAllTransactions, useDepotBuys, useInvest, useRemoveInvest, useSetSetting, useSettings, useToday } from "./queries";
 
 const uid = () => crypto.randomUUID();
 const CAT: Record<string, { icon: string }> = {
@@ -111,6 +111,16 @@ export function useMama() {
 }
 
 /* ---------- Depot ---------- */
+/** Aus Einzahlungen berechnete Anteile je Symbol (ohne die Anteile der Einstellungen). */
+export function useBought() {
+  const buys = useDepotBuys().data;
+  return useMemo(() => {
+    const shares: Record<string, number> = {};
+    for (const b of buys ?? []) shares[b.symbol] = (shares[b.symbol] ?? 0) + b.shares;
+    return shares;
+  }, [buys]);
+}
+
 export function useDepot() {
   const query = useInvest();
   const entries = query.data ?? [];
@@ -189,6 +199,7 @@ export function DepotSheet() {
       <div className="sec">Einzahlungen</div>
       <div className="field"><label htmlFor="d-m">Pro Monat</label><input id="d-m" className="inp num" inputMode="decimal" defaultValue={s.investMonthly} onBlur={(e) => { const n = parse(e.target.value); if (n !== null && String(n) !== s.investMonthly) setS({ investMonthly: String(n) }); }} /></div>
       <div className="field"><label htmlFor="d-t">Am</label><input id="d-t" className="inp num" style={{ width: 70 }} inputMode="numeric" defaultValue={s.investDay} onBlur={(e) => { const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 28 && String(n) !== s.investDay) setS({ investDay: String(n) }); else e.target.value = s.investDay; }} /></div>
+      <SplitPills />
       <div className="field"><label htmlFor="d-e">Nachtragen</label><input id="d-e" className="inp num" style={{ width: 110 }} inputMode="decimal" value={dep} onChange={(e) => setDep(e.target.value)} /></div>
       <div className="field"><label htmlFor="d-ed">Datum</label><input id="d-ed" className="inp" type="date" value={dd} onChange={(e) => setDd(e.target.value)} /></div>
       <button type="button" className="cta ghost press" disabled={add.isPending || parse(dep) === null || !dep || !dd} onClick={() => { add.mutate({ id: uid(), kind: "deposit", date: dd, amount: parse(dep)!, note: "von Hand" }, { onSuccess: () => setDep("") }); }}>Einzahlung eintragen</button>
@@ -210,6 +221,43 @@ export function DepotSheet() {
           <button type="button" className="iconbtn press" aria-label="Eintrag löschen" onClick={() => rem.mutate(e.id)}><Icon n="trash" /></button>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Aufteilung der Einzahlungen auf VUAA und XNAS, wenige feste Stufen. */
+function SplitPills() {
+  const s = useSettings();
+  const setS = useSetSetting();
+  const cur = depotSplit(s);
+  const vuaa = cur.find((p) => p.symbol === "VUAA")?.pct ?? 0;
+  const only = cur.every((p) => p.symbol === "VUAA" || p.symbol === "XNAS");
+  const set = (a: number) => setS({ investSplit: JSON.stringify([{ symbol: "VUAA", pct: a }, { symbol: "XNAS", pct: 100 - a }].filter((p) => p.pct > 0)) });
+  return (
+    <>
+      <div className="field"><span>Aufteilung VUAA / XNAS</span></div>
+      <div className="seg full" role="group" aria-label="Aufteilung VUAA zu XNAS">
+        {[100, 75, 50, 25, 0].map((a) => <button key={a} type="button" className="press" aria-pressed={only && vuaa === a} onClick={() => set(a)}>{a}/{100 - a}</button>)}
+      </div>
+    </>
+  );
+}
+
+/** Schnelle Zusatz-Einzahlung: Betrag gross, Datum heute. */
+export function DepositSheet() {
+  const add = useAddInvest();
+  const sheet = useSheet();
+  const today = useToday();
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(today);
+  const n = parseFloat(amount.replace(",", "."));
+  const ok = Number.isFinite(n) && n > 0 && !!date;
+  return (
+    <div>
+      <h3>Einzahlung</h3>
+      <input className="inp num" style={{ width: "100%", height: 72, fontSize: 44, fontWeight: 700, textAlign: "center", marginTop: 8 }} inputMode="decimal" autoFocus aria-label="Betrag" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      <div className="field" style={{ borderTop: 0 }}><label htmlFor="q-d">Datum</label><input id="q-d" className="inp" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+      <button type="button" className="cta press" disabled={add.isPending || !ok} onClick={() => add.mutate({ id: uid(), kind: "deposit", date, amount: n, note: "von Hand" }, { onSuccess: () => { notify("Einzahlung eingetragen"); sheet.close(); } })}>Eintragen</button>
     </div>
   );
 }

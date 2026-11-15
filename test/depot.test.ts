@@ -249,3 +249,16 @@ describe("Sparplan: Käufe aus Einzahlungen", () => {
     expect(Math.abs(st.latest!.gain - st.series.at(-2)!.gain)).toBeLessThan(0.05);
   });
 });
+
+import { monthlyCount as mc } from "../src/shared/depot";
+describe("erste Monatsrate im Startmonat", () => {
+  it("Start 14.11., Stichtag 25.: Rate am 25.11. zählt", () => {
+    expect(mc("2026-11-14", "2026-11-24", 25)).toBe(0);
+    expect(mc("2026-11-14", "2026-11-25", 25)).toBe(1);
+    expect(mc("2026-11-14", "2026-12-25", 25)).toBe(2);
+  });
+  it("Start am oder nach dem Stichtag: erst Folgemonat", () => {
+    expect(mc("2026-11-25", "2026-11-30", 25)).toBe(0);
+    expect(mc("2026-11-26", "2026-12-25", 25)).toBe(1);
+  });
+});

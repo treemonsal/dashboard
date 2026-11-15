@@ -6,6 +6,19 @@
 - Gewinn eines Werts = Wert minus Einzahlungen bis zu dessen Datum (nicht bis heute), in Franken und Prozent.
 - Die Einstellung `investStart` wird nicht mehr gerechnet (der Startbestand ist der erste Wert).
 
+## Sparplan (Käufe aus Einzahlungen)
+Seit dem Sparplan steigt der Wert mit den Einzahlungen, nicht nur "Einbezahlt". Bestätigt: 350 CHF pro Monat am 25., aufgeteilt 50/50 auf VUAA und XNAS. NVIDIA bleibt gehalten und bewertet, wird nicht mehr gekauft. Zusatz-Einzahlungen von Hand (meist am Monatsende) gehen ebenfalls nach der Aufteilung.
+
+- Einstellung `investSplit` (JSON, Standard `[{"symbol":"VUAA","pct":50},{"symbol":"XNAS","pct":50}]`). Gültig nur mit bekannten Symbolen, je einmal, Summe 100 (zod und `parseSplit` in src/shared/depot.ts). Änderbar im Depot-Blatt als Pillen 100/0 bis 0/100 (VUAA/XNAS). Eine Änderung gilt für künftige Käufe; gespeicherte Käufe bleiben.
+- Zählende Einzahlungen (`depositsAfter`): Monatsrate am Stichtag in jedem Monat nach dem Startmonat und Einzahlungen von Hand, jeweils mit Datum NACH dem letzten Handwert. Was am oder vor dem Datum des letzten Handwerts liegt, steckt schon in dessen Anteilen.
+- Kauf (`planBuys`): Betrag mal Anteil geteilt durch (Kurs EUR mal EUR/CHF) am ersten Kurs am oder nach dem Einzahlungsdatum. Fällt die Einzahlung auf ein Wochenende, wartet der Kauf auf den Montagskurs. Tradegate liefert nur den letzten Kurs: der Tageslauf hält den Kauf fest, sobald der Kurs da ist. Ist der erste verfügbare Kurs später als der erste Werktag (Lauf fiel aus), wird der spätere Kurs genommen und `late` gesetzt (Feiertage kennt die Logik nicht und markieren dann auch). Ohne Kurs oder EUR/CHF entsteht kein Kauf, es wird nichts erfunden; die anderen Symbole laufen weiter.
+- Tabelle `depot_buys` (Migration 0012, additiv): Einzahlungs-Schlüssel (`m:YYYY-MM` für die Monatsrate, `d:<id>` für Einträge von Hand), Einzahlungsdatum, Symbol, Betrag CHF, Anteile, Kurs EUR, EUR/CHF, Kaufdatum, `late`. Eindeutig je Einzahlung und Symbol, ein zweiter Lauf kauft nie doppelt. Käufe werden nie gelöscht.
+- Wert: Anteile = Positionen aus `investHoldings` plus gekaufte Anteile bis zum Kaufdatum. Am Kauftag bleibt der Gewinn gleich (Kauf zum Kurs des Tages, bis auf Rundung auf 6 Stellen).
+- Neuer Handwert: ab dann zählen nur noch Einzahlungen nach diesem Datum (`validBuys`). Frühere Käufe zählen nicht doppelt, bleiben aber in der Tabelle. Wer einen Handwert einträgt, trägt auch die Anteile in den Positionen neu ein. Wird eine Einzahlung von Hand gelöscht, zählt ihr Kauf nicht mehr.
+- Käufe entstehen nur im reinen Tradegate Portfolio. Bei leerer Positionsliste (SPY Schätzung) oder einer bisherigen US Einzelposition gibt es keine.
+- Gebühren und Teilausführungen sind nicht berücksichtigt. Anteile aus Käufen sind berechnet, in der Oberfläche mit "≈" (Position und Liste). `GET /api/depot/buys` liefert die zählenden Käufe.
+- Zusatz-Einzahlung: Taste "Einzahlung" im Portfolio (Betrag gross, Datum heute). Das Blatt "Eintragen" kennt weiterhin "Nachtragen" mit Datum.
+
 ## Portfolio ab 14.11.2026
 Die Oberfläche heisst Portfolio. Bestätigte Positionen sind VUAA 12.2 Anteile, XNAS 23 Anteile und NVIDIA 3 Aktien. Ohne bisherige Konfiguration verwendet das Dashboard diese bestätigten Mengen. Eine gespeicherte Einzelposition bleibt erhalten, bis die drei Positionen ausdrücklich übernommen werden. `investHoldings` speichert mehrere Positionen als JSON; `[]` deaktiviert sie und erhält die bisherige SPY Schätzung. Einträge von Hand bleiben erhalten.
 

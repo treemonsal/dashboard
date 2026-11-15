@@ -163,7 +163,7 @@ describe("Sparplan im Lauf", () => {
     await env.DB.exec("INSERT INTO investment_entries (id,kind,date,amount,note) VALUES ('z1','deposit','2026-11-16',100,'von Hand')");
     await updateDepot(env, src([["2026-11-16", 100]], [["2026-11-16", 50]]));
     expect((await buys()).map((x) => [x.depositKey, x.symbol, x.chf])).toEqual([["d:z1", "VUAA", 50], ["d:z1", "XNAS", 50]]);
-    expect((await rows()).find((x) => x.date === "2026-11-16")!.amount).toBeCloseTo(2 * 90 + 3 * 45 + 100, 1);
+    expect((await rows()).find((x) => x.date === "2026-11-16" && x.kind === "value")!.amount).toBeCloseTo(2 * 90 + 3 * 45 + 100, 1);
   });
   it("fehlender Kurs: nur das Symbol mit Kurs wird gekauft, kein Teilwert; später verspätet nachgeholt", async () => {
     await setup();
