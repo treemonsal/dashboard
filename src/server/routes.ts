@@ -4,6 +4,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, like, lte, ne, or, sql } from
 import { z } from "zod";
 import * as schema from "./db/schema";
 import { updateDepot } from "./depot/run";
+import { depositsAfter, depotRules, toDepotEntry, validBuys } from "../shared/depot";
 import { registerTiefe } from "./tiefe";
 import {
   SETTING_DEFAULTS,
@@ -402,6 +403,15 @@ export function registerExtra(api: Hono<AppEnv>) {
     }
     const r = await c.var.db.insert(t.investmentEntries).values({ ...b, id: b.id ?? newId(), estimated: false }).returning().get();
     return c.json(investOut(r), 201);
+  });
+  // Aus Einzahlungen gekaufte Anteile, die noch zählen (nach dem letzten Handwert, Einzahlung nicht gelöscht).
+  api.get("/depot/buys", async (c) => {
+    const rows = await c.var.db.select().from(t.settings);
+    const s = { ...SETTING_DEFAULTS, ...Object.fromEntries(rows.map((r) => [r.key, r.value])) };
+    const entries = (await c.var.db.select().from(t.investmentEntries)).map((r) => toDepotEntry(r));
+    const deposits = depositsAfter(entries, depotRules(s), todayInZone());
+    const buys = validBuys(await c.var.db.select().from(t.depotBuys).orderBy(asc(t.depotBuys.buyDate)), deposits);
+    return c.json(buys.map((b) => ({ symbol: b.symbol, shares: b.shares, buyDate: b.buyDate, depositDate: b.depositDate, late: b.late })));
   });
   api.post("/depot/refresh", async (c) => c.json(await updateDepot(c.env)));
   api.delete("/invest/:id", v("param", idParam), async (c) => {

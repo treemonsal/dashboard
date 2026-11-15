@@ -20,6 +20,8 @@ export type Settings = {
   investCurrency: string;
   /** Mehrere bestätigte Positionen, JSON. Leer erhält die bisherige Einzelposition. */
   investHoldings: string;
+  /** Aufteilung der Einzahlungen auf die Positionen, JSON [{"symbol","pct"}], Summe 100 */
+  investSplit: string;
   /** Wer die Hälfte der Mahlzeiten auswärts zurückzahlt (leer, bis eingetragen) */
   mamaName: string;
   /** "1" = Einträge, die mit "Hausaufgabe" beginnen, im Kalender ausblenden */
@@ -31,5 +33,5 @@ export type Settings = {
   /** Konto, dem Buchungen aus dem Kurzbefehl zugeordnet werden (Name) */
   eingangKonto: string;
 };
-export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "4", salary: "650", investMonthly: "350", investStart: "", investDay: "25", investSymbol: "", investShares: "", investCurrency: "USD", investHoldings: "", mamaName: "", hideHomework: "1", schoolHolidayUntil: "", workoutView: "sport", eingangKonto: "Revolut" };
+export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "4", salary: "650", investMonthly: "350", investStart: "", investDay: "25", investSymbol: "", investShares: "", investCurrency: "USD", investHoldings: "", investSplit: '[{"symbol":"VUAA","pct":50},{"symbol":"XNAS","pct":50}]', mamaName: "", hideHomework: "1", schoolHolidayUntil: "", workoutView: "sport", eingangKonto: "Revolut" };
 

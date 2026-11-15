@@ -52,3 +52,7 @@ Stand 14.11.2026. Diese Datei zuerst lesen, bevor etwas geplant oder gefragt wir
 - Schule: KVZ-Portal, Teams, OneNote-Klassennotizbücher, Moodle (kvz-moodle2.ch). Fächer: E, M, FRW, W+R, T+U, HKB.
 - Todoist ist praktisch leer (nur Inbox und "Video-Eingang"). Kein Import nötig.
 - Kein GitHub. Code liegt in GitLab (hahntim518/dashboard), Sicherung über scripts/sichern.mjs.
+
+## Depot
+- Sparplan 350 CHF pro Monat am 25., 50/50: 175 VUAA, 175 XNAS. 3 NVIDIA gehalten, keine Käufe mehr. Manchmal Zusatz-Einzahlung am Monatsende, ebenfalls 50/50.
+- Gym-Tage fix: Mo, Mi, Fr, Sa.

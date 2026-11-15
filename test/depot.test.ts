@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { depotHoldings, portfolioProduct, planPortfolioValues, depositedAt, depotState, monthlyCount, planValues, type Close, type DepotConfig, type DepotEntry } from "../src/shared/depot";
+import { depositsAfter, depotSplit, lotsBySymbol, nextWeekday, parseSplit, planBuys, validBuys, depotHoldings, portfolioProduct, planPortfolioValues, depositedAt, depotState, monthlyCount, planValues, type Close, type DepotConfig, type DepotEntry } from "../src/shared/depot";
 
 const rules = { monthly: 350, day: 25 };
 const val = (date: string, amount: number, estimated = false): DepotEntry => ({ kind: "value", date, amount, estimated });
@@ -155,5 +155,97 @@ describe("Mehrere ETF im Depot", () => {
     const old = { investSymbol: "VOO", investShares: "2", investCurrency: "USD" };
     expect(depotHoldings({ ...old, investHoldings: "broken" })).toBeNull();
     expect(depotHoldings({ ...old, investHoldings: '[{"symbol":"VUAA","exchange":"","shares":0}]' })).toBeNull();
+  });
+});
+
+
+describe("Sparplan: Käufe aus Einzahlungen", () => {
+  const split = depotSplit({});
+  const c = (rows: [string, number][]): Close[] => rows.map(([date, close]) => ({ date, close }));
+  const base = [val("2026-11-14", 3000)];
+  const buy = (entries: DepotEntry[], today: string, closes: Record<string, Close[]>, have = new Set<string>(), fx = c([["2026-11-01", 0.9]])) =>
+    planBuys({ deposits: depositsAfter(entries, rules, today), split, have, closes, fx, today });
+
+  it("Aufteilung: Standard 50/50, nur bekannte Symbole, Summe 100", () => {
+    expect(depotSplit({})).toEqual([{ symbol: "VUAA", pct: 50 }, { symbol: "XNAS", pct: 50 }]);
+    expect(depotSplit({ investSplit: "kaputt" })).toEqual(depotSplit({}));
+    expect(parseSplit('[{"symbol":"VUAA","pct":70},{"symbol":"XNAS","pct":30}]')).toHaveLength(2);
+    expect(parseSplit('[{"symbol":"VUAA","pct":100}]')).toHaveLength(1);
+    expect(parseSplit('[{"symbol":"VUAA","pct":60},{"symbol":"XNAS","pct":30}]')).toBeNull();
+    expect(parseSplit('[{"symbol":"FOO","pct":100}]')).toBeNull();
+    expect(parseSplit('[{"symbol":"VUAA","pct":50},{"symbol":"VUAA","pct":50}]')).toBeNull();
+    expect(parseSplit("[]")).toBeNull();
+  });
+  it("Monatsrate am Stichtag: 175 je Symbol zum Kurs des Tages mal EUR/CHF", () => {
+    const closes = { VUAA: c([["2026-12-25", 100]]), XNAS: c([["2026-12-25", 50]]) };
+    const b = buy(base, "2026-12-25", closes);
+    expect(b.map((x) => [x.depositKey, x.symbol, x.chf, x.shares, x.buyDate, x.late])).toEqual([
+      ["m:2026-12", "VUAA", 175, 175 / 90, "2026-12-25", false],
+      ["m:2026-12", "XNAS", 175, 175 / 45, "2026-12-25", false],
+    ].map((r) => [r[0], r[1], r[2], Math.round((r[3] as number) * 1e6) / 1e6, r[4], r[5]]));
+    // vor dem Stichtag nichts
+    expect(buy(base, "2026-12-24", closes)).toEqual([]);
+  });
+  it("Zusatz-Einzahlung von Hand geht ebenfalls 50/50", () => {
+    const entries = [...base, { ...dep("2026-11-30", 100), id: "z1" }];
+    const b = buy(entries, "2026-11-30", { VUAA: c([["2026-11-30", 90]]), XNAS: c([["2026-11-30", 45]]) });
+    expect(b.map((x) => [x.depositKey, x.symbol, x.chf])).toEqual([["d:z1", "VUAA", 50], ["d:z1", "XNAS", 50]]);
+    expect(b[0]!.shares).toBeCloseTo(50 / (90 * 0.9), 6);
+  });
+  it("Wochenende: Kauf erst am Montag, nicht verspätet", () => {
+    const entries = [...base, { ...dep("2026-11-28", 100), id: "w" }]; // Samstag
+    expect(nextWeekday("2026-11-28")).toBe("2026-11-30");
+    expect(buy(entries, "2026-11-28", { VUAA: c([["2026-11-27", 100]]), XNAS: c([["2026-11-27", 50]]) })).toEqual([]);
+    const b = buy(entries, "2026-11-30", { VUAA: c([["2026-11-30", 100]]), XNAS: c([["2026-11-30", 50]]) });
+    expect(b.map((x) => [x.buyDate, x.late])).toEqual([["2026-11-30", false], ["2026-11-30", false]]);
+  });
+  it("Kurs erst später verfügbar: erster Kurs danach, als verspätet markiert", () => {
+    const b = buy(base, "2026-12-29", { VUAA: c([["2026-12-29", 100]]), XNAS: c([["2026-12-29", 50]]) });
+    expect(b.map((x) => [x.buyDate, x.late])).toEqual([["2026-12-29", true], ["2026-12-29", true]]);
+  });
+  it("fehlender Kurs oder Wechselkurs: kein Kauf, kein erfundener Kurs, andere Symbole laufen", () => {
+    const only = buy(base, "2026-12-25", { VUAA: c([["2026-12-25", 100]]) });
+    expect(only.map((x) => x.symbol)).toEqual(["VUAA"]);
+    expect(planBuys({ deposits: depositsAfter(base, rules, "2026-12-25"), split, have: new Set(), closes: { VUAA: c([["2026-12-25", 100]]) }, fx: null, today: "2026-12-25" })).toEqual([]);
+    // Kurs vor der Einzahlung zählt nicht
+    expect(buy(base, "2026-12-25", { VUAA: c([["2026-12-24", 100]]), XNAS: [] })).toEqual([]);
+  });
+  it("kein Doppel: schon gekaufte Einzahlung und Symbol werden übersprungen", () => {
+    const closes = { VUAA: c([["2026-12-25", 100]]), XNAS: c([["2026-12-25", 50]]) };
+    const b = buy(base, "2026-12-25", closes, new Set(["m:2026-12|VUAA"]));
+    expect(b.map((x) => x.symbol)).toEqual(["XNAS"]);
+    expect(buy(base, "2026-12-25", closes, new Set(["m:2026-12|VUAA", "m:2026-12|XNAS"]))).toEqual([]);
+  });
+  it("neuer Handwert setzt die Basis zurück: frühere Einzahlungen und Käufe zählen nicht mehr", () => {
+    const entries = [...base, { ...dep("2026-11-30", 100), id: "z" }, val("2027-01-10", 3900)];
+    expect(depositsAfter(entries, rules, "2027-01-10")).toEqual([]);
+    const old = [{ depositKey: "m:2026-12", symbol: "VUAA", buyDate: "2026-12-25", shares: 1 }];
+    expect(validBuys(old, depositsAfter(entries, rules, "2027-01-10"))).toEqual([]);
+    // danach zählt erst die nächste Rate
+    expect(depositsAfter(entries, rules, "2027-01-25").map((d) => d.key)).toEqual(["m:2027-01"]);
+    // gelöschte Zusatz-Einzahlung: ihr Kauf zählt nicht mehr
+    expect(validBuys([{ depositKey: "d:weg", symbol: "VUAA", buyDate: "2026-11-30", shares: 1 }], depositsAfter(base, rules, "2026-12-01"))).toEqual([]);
+  });
+  it("Einzahlung am Tag des Handwerts ist im Handwert enthalten", () => {
+    expect(depositsAfter([...base, { ...dep("2026-11-14", 50), id: "g" }], rules, "2026-11-20")).toEqual([]);
+  });
+  it("Gewinn springt am Kauftag nicht (bis auf Rundung)", () => {
+    const entries: DepotEntry[] = [val("2026-11-14", 3000), val("2026-12-24", 3600)];
+    const hold = { currency: "EUR" as const };
+    const ph = (symbol: string, shares: number) => ({ symbol, shares, ...hold });
+    const closes = { VUAA: c([["2026-12-24", 100], ["2026-12-28", 100]]), XNAS: c([["2026-12-24", 50], ["2026-12-28", 50]]) };
+    const fx = c([["2026-12-01", 0.9]]);
+    const deposits = depositsAfter(entries, rules, "2026-12-28");
+    const buys = planBuys({ deposits, split, have: new Set(), closes: { VUAA: closes.VUAA!.slice(1), XNAS: closes.XNAS!.slice(1) }, fx, today: "2026-12-28" });
+    const lots = lotsBySymbol(buys);
+    const vals = planPortfolioValues({ entries, today: "2026-12-28", positions: [
+      { config: ph("VUAA", 20), held: closes.VUAA!, fx, lots: lots.VUAA },
+      { config: ph("XNAS", 40), held: closes.XNAS!, fx, lots: lots.XNAS },
+    ] });
+    expect(vals).toHaveLength(1);
+    // Wert vor dem Kauf: 20*100*0.9 + 40*50*0.9 = 3600; danach plus 350 Franken Käufe zu gleichem Kurs
+    expect(vals[0]!.amount).toBeCloseTo(3600 + 350, 1);
+    const st = depotState([val("2026-11-14", 3000), val("2026-12-24", 3600), { kind: "value", date: "2026-12-28", amount: vals[0]!.amount, estimated: false, auto: true }], rules);
+    expect(Math.abs(st.latest!.gain - st.series.at(-2)!.gain)).toBeLessThan(0.05);
   });
 });

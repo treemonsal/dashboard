@@ -1,5 +1,6 @@
 // Gemeinsamer Vertrag zwischen Oberfläche und Server: Eingaben (zod) und Antworten (Typen).
 import { z } from "zod";
+import { parseSplit } from "./depot";
 
 export const id = z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/);
 export const isoDate = z.iso.date();
@@ -164,6 +165,7 @@ export const settingsUpdate = z
         return Array.isArray(rows) && rows.length <= 20 && new Set(rows.map((r: { symbol?: string }) => r?.symbol)).size === rows.length && rows.every((r: { symbol?: string; shares?: number }) => r && ["VUAA", "XNAS", "NVDA"].includes(r.symbol ?? "") && typeof r.shares === "number" && Number.isFinite(r.shares) && r.shares > 0 && r.shares <= 10000000);
       } catch { return false; }
     }, "Gültige Portfolio Positionen mit positiven Anteilen erforderlich"),
+    investSplit: z.string().max(500).refine((value) => parseSplit(value) !== null, "Gültige Aufteilung mit bekannten Symbolen und Summe 100 erforderlich"),
     mamaName: z.string().trim().max(60),
     hideHomework: z.enum(["0", "1"]),
     schoolHolidayUntil: z.union([isoDate, z.literal("")]),

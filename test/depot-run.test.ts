@@ -16,7 +16,7 @@ const rows = async () => (await db.select().from(schema.investmentEntries).all()
 const runs = async () => (await db.select().from(schema.syncRuns).all()).filter((r) => r.kind === "depot");
 
 beforeEach(async () => {
-  for (const t of ["investment_entries", "sync_runs", "settings"]) await env.DB.exec(`DELETE FROM ${t}`);
+  for (const t of ["investment_entries", "sync_runs", "settings", "depot_buys"]) await env.DB.exec(`DELETE FROM ${t}`);
   await env.DB.exec("INSERT INTO settings (key,value) VALUES ('investHoldings','[]')");
 });
 
@@ -131,5 +131,63 @@ describe("Mehrere ETF: Quellen und Lauf", () => {
     const r = await updateDepot(env, { now: NOW, price: price({ SPY, "IE00BFMXXD54": [["2026-11-13", 100]] }), fx: fx([["2026-11-13", 1]]) });
     expect(r).toMatchObject({ ok: false, added: 0 });
     expect(await rows()).toHaveLength(1);
+  });
+});
+
+
+describe("Sparplan im Lauf", () => {
+  const ETF = [{ symbol: "VUAA", shares: 2 }, { symbol: "XNAS", shares: 3 }];
+  const setup = async (day = "13") => {
+    await hand("2026-10-14", 1000);
+    await env.DB.prepare("INSERT OR REPLACE INTO settings (key,value) VALUES ('investHoldings',?),('investDay',?)").bind(JSON.stringify(ETF), day).run();
+  };
+  const src = (vuaa: [string, number][], xnas: [string, number][]) => ({ now: NOW, price: price({ IE00BFMXXD54: vuaa, IE00BMFKG444: xnas }), fx: fx([["2026-11-01", 0.9]]) });
+  const buys = async () => (await db.select().from(schema.depotBuys).all()).sort((a, b) => a.depositKey.localeCompare(b.depositKey) || a.symbol.localeCompare(b.symbol));
+
+  it("Monatsrate wird 50/50 gekauft, der Wert enthält die Käufe, ein zweiter Lauf kauft nicht doppelt", async () => {
+    await setup();
+    const o = src([["2026-11-13", 100]], [["2026-11-13", 50]]);
+    const r = await updateDepot(env, o);
+    expect(r.ok).toBe(true);
+    expect(r.message).toContain("2 Käufe");
+    const b = await buys();
+    expect(b.map((x) => [x.depositKey, x.symbol, x.chf, x.buyDate, x.late])).toEqual([["m:2026-11", "VUAA", 175, "2026-11-13", false], ["m:2026-11", "XNAS", 175, "2026-11-13", false]]);
+    expect(b[0]!.shares).toBeCloseTo(175 / 90, 5);
+    expect((await rows()).find((x) => x.date === "2026-11-13")!.amount).toBeCloseTo(2 * 90 + 3 * 45 + 350, 1);
+    await updateDepot(env, o);
+    expect(await buys()).toHaveLength(2);
+    expect((await rows()).filter((x) => x.date === "2026-11-13")).toHaveLength(1);
+  });
+  it("Zusatz-Einzahlung von Hand wird gekauft und zählt zum Wert", async () => {
+    await setup("28");
+    await env.DB.exec("INSERT INTO investment_entries (id,kind,date,amount,note) VALUES ('z1','deposit','2026-11-16',100,'von Hand')");
+    await updateDepot(env, src([["2026-11-16", 100]], [["2026-11-16", 50]]));
+    expect((await buys()).map((x) => [x.depositKey, x.symbol, x.chf])).toEqual([["d:z1", "VUAA", 50], ["d:z1", "XNAS", 50]]);
+    expect((await rows()).find((x) => x.date === "2026-11-16")!.amount).toBeCloseTo(2 * 90 + 3 * 45 + 100, 1);
+  });
+  it("fehlender Kurs: nur das Symbol mit Kurs wird gekauft, kein Teilwert; später verspätet nachgeholt", async () => {
+    await setup();
+    const r = await updateDepot(env, src([["2026-11-13", 100]], []));
+    expect(r.ok).toBe(false);
+    expect((await buys()).map((x) => x.symbol)).toEqual(["VUAA"]);
+    expect(await rows()).toHaveLength(1);
+    await updateDepot(env, src([["2026-11-17", 100]], [["2026-11-17", 50]]));
+    expect((await buys()).map((x) => [x.symbol, x.buyDate, x.late])).toEqual([["VUAA", "2026-11-13", false], ["XNAS", "2026-11-17", true]]);
+  });
+  it("neuer Handwert setzt die Basis zurück: frühere Käufe zählen nicht, nichts wird gelöscht", async () => {
+    await setup();
+    await updateDepot(env, src([["2026-11-13", 100]], [["2026-11-13", 50]]));
+    await hand("2026-11-16", 1500);
+    await updateDepot(env, src([["2026-11-17", 100]], [["2026-11-17", 50]]));
+    expect(await buys()).toHaveLength(2);
+    expect((await rows()).find((x) => x.date === "2026-11-17")!.amount).toBeCloseTo(2 * 100 * 0.9 + 3 * 50 * 0.9, 1);
+    const res = await exports.default.fetch(new Request("http://localhost/api/depot/buys"));
+    expect(await res.json()).toEqual([]);
+  });
+  it("Einstellung investSplit wird geprüft", async () => {
+    const put = (v: string) => exports.default.fetch(new Request("http://localhost/api/settings", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ investSplit: v }) }));
+    expect((await put('[{"symbol":"VUAA","pct":70},{"symbol":"XNAS","pct":30}]')).status).toBe(200);
+    expect((await put('[{"symbol":"VUAA","pct":70}]')).status).toBe(400);
+    expect((await put('[{"symbol":"ABC","pct":100}]')).status).toBe(400);
   });
 });

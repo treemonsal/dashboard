@@ -85,6 +85,13 @@
       "when": 1794719888807,
       "tag": "0011_laufend",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1794741079900,
+      "tag": "0012_sparplan",
+      "breakpoints": true
     }
   ]
 }

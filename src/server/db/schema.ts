@@ -370,6 +370,28 @@ export const investmentEntries = sqliteTable(
   (t) => [index("investment_entries_date_idx").on(t.date), check("investment_entries_kind_chk", sql`${t.kind} in ('value','deposit')`)],
 );
 
+// Aus Einzahlungen gekaufte Anteile (Sparplan). Je Einzahlung und Symbol genau eine Zeile.
+// depositKey: "m:YYYY-MM" (Monatsrate) oder "d:<id>" (von Hand eingetragene Einzahlung).
+export const depotBuys = sqliteTable(
+  "depot_buys",
+  {
+    id: text("id").primaryKey(),
+    depositKey: text("deposit_key").notNull(),
+    depositDate: text("deposit_date").notNull(),
+    symbol: text("symbol").notNull(),
+    chf: real("chf").notNull(),
+    shares: real("shares").notNull(),
+    // Kurs in EUR und EUR/CHF am Kaufdatum
+    price: real("price").notNull(),
+    fx: real("fx").notNull(),
+    buyDate: text("buy_date").notNull(),
+    // 1 = erster verfügbarer Kurs lag nach dem ersten Handelstag
+    late: integer("late", { mode: "boolean" }).notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("depot_buys_uq").on(t.depositKey, t.symbol), index("depot_buys_date_idx").on(t.buyDate)],
+);
+
 /* ---------- Gelernte Kategorie-Regeln ---------- */
 export const categoryRules = sqliteTable(
   "category_rules",

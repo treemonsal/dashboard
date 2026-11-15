@@ -232,9 +232,9 @@ export function depotHoldings(s: { investSymbol: string; investShares: string; i
 }
 
 /** Nur vollständige, gleich datierte Kurse ergeben einen Gesamtwert. Keine Teilwerte, kein Proxy. */
-export function planPortfolioValues(o: { entries: DepotEntry[]; today: string; positions: { config: DepotConfig; held: Close[]; fx: Close[] | null }[] }): NewValue[] {
+export function planPortfolioValues(o: { entries: DepotEntry[]; today: string; positions: { config: DepotConfig; held: Close[]; fx: Close[] | null; /** Aus Einzahlungen gekaufte Anteile (Kaufdatum), zählen ab diesem Tag zusätzlich */ lots?: Lot[] }[] }): NewValue[] {
   const base = o.entries.filter(e => e.kind === "value" && isHand(e)).sort(byDate).at(-1);
-  if (!base || !o.positions.length || o.positions.some(p => !p.held.length || !(p.config.shares > 0))) return [];
+  if (!base || !o.positions.length || o.positions.some(p => !p.held.length || !(p.config.shares + lotShares(p.lots, o.today) > 0))) return [];
   const dates = [...new Set(o.positions[0]!.held.map(c => c.date))].filter(d => d > base.date && d <= o.today).sort();
   const out: NewValue[] = [];
   for (const date of dates) {
@@ -244,9 +244,122 @@ export function planPortfolioValues(o: { entries: DepotEntry[]; today: string; p
       const close = p.held.find(c => c.date === date)?.close;
       const fx = p.config.currency === "CHF" ? 1 : onOrBefore(p.fx ?? [], date)?.close;
       if (!close || !Number.isFinite(close) || close <= 0 || !fx || !Number.isFinite(fx) || fx <= 0) { complete = false; break; }
-      amount += p.config.shares * close * fx;
+      amount += (p.config.shares + lotShares(p.lots, date)) * close * fx;
     }
     if (complete && Number.isFinite(amount)) out.push({ date, amount: r2(amount), estimated: false });
   }
+  return out;
+}
+
+/* ---------- Sparplan: Käufe aus Einzahlungen ---------- */
+export interface SplitPart { symbol: string; pct: number }
+export const DEFAULT_SPLIT: SplitPart[] = [{ symbol: "VUAA", pct: 50 }, { symbol: "XNAS", pct: 50 }];
+export const DEFAULT_SPLIT_JSON = JSON.stringify(DEFAULT_SPLIT);
+
+/** Aufteilung prüfen: nur bekannte Symbole, je einmal, Anteile 0 bis 100 (ohne 0), Summe 100. Sonst null. */
+export function parseSplit(raw: string): SplitPart[] | null {
+  try {
+    const rows: unknown = JSON.parse(raw);
+    if (!Array.isArray(rows) || !rows.length || rows.length > PORTFOLIO_PRODUCTS.length) return null;
+    const seen = new Set<string>();
+    let sum = 0;
+    const out: SplitPart[] = [];
+    for (const r of rows as { symbol?: unknown; pct?: unknown }[]) {
+      if (!r || typeof r.symbol !== "string" || !portfolioProduct(r.symbol) || seen.has(r.symbol) || typeof r.pct !== "number" || !Number.isFinite(r.pct) || r.pct <= 0 || r.pct > 100) return null;
+      seen.add(r.symbol);
+      sum += r.pct;
+      out.push({ symbol: r.symbol, pct: r.pct });
+    }
+    return Math.abs(sum - 100) < 1e-9 ? out : null;
+  } catch { return null; }
+}
+/** Gespeicherte Aufteilung; leer oder ungültig ergibt den Standard 50/50 VUAA und XNAS. */
+export const depotSplit = (s: { investSplit?: string }): SplitPart[] => (s.investSplit?.trim() ? parseSplit(s.investSplit) : null) ?? DEFAULT_SPLIT;
+
+export interface Lot { date: string; shares: number }
+export const lotShares = (lots: Lot[] | undefined, date: string): number => (lots ?? []).reduce((a, l) => (l.date <= date ? a + l.shares : a), 0);
+
+export interface DepotDeposit {
+  /** "m:YYYY-MM" Monatsrate, "d:<id>" von Hand */
+  key: string;
+  date: string;
+  amount: number;
+  manual: boolean;
+}
+/** Letzter Handwert: ab hier gelten die Anteile aus den Einstellungen, frühere Käufe zählen nicht. */
+export function baseOf(entries: DepotEntry[]): { date: string; amount: number } | null {
+  const b = entries.filter((e) => e.kind === "value" && isHand(e)).sort(byDate).at(-1);
+  return b ? { date: b.date, amount: b.amount } : null;
+}
+/** Einzahlungen nach dem letzten Handwert und bis und mit `upTo`: Monatsrate am Stichtag und Zusatz-Einzahlungen von Hand. */
+export function depositsAfter(entries: DepotEntry[], rules: DepotRules, upTo: string): DepotDeposit[] {
+  const s = startOf(entries);
+  const base = baseOf(entries);
+  if (!s || !base) return [];
+  const out: DepotDeposit[] = [];
+  if (rules.monthly > 0) {
+    let y = Number(s.date.slice(0, 4));
+    let m = Number(s.date.slice(5, 7)) + 1;
+    if (m > 12) { m = 1; y++; }
+    for (let i = 0; i < 1200; i++) {
+      const date = monthDate(y, m, rules.day);
+      if (date > upTo) break;
+      if (date > base.date) out.push({ key: `m:${y}-${String(m).padStart(2, "0")}`, date, amount: rules.monthly, manual: false });
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+  }
+  for (const e of entries) if (e.kind === "deposit" && e.id && e.amount > 0 && e.date > base.date && e.date <= upTo) out.push({ key: `d:${e.id}`, date: e.date, amount: e.amount, manual: true });
+  return out.sort((a, b) => a.date.localeCompare(b.date) || a.key.localeCompare(b.key));
+}
+
+export interface Buy {
+  depositKey: string;
+  depositDate: string;
+  symbol: string;
+  chf: number;
+  shares: number;
+  price: number;
+  fx: number;
+  buyDate: string;
+  late: boolean;
+}
+/** Nächster Werktag am oder nach `date` (Feiertage unbekannt). */
+export function nextWeekday(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+const r6 = (x: number) => Math.round(x * 1e6) / 1e6;
+
+/**
+ * Neue Käufe: je Einzahlung und Symbol zum ersten Kurs am oder nach dem Einzahlungsdatum (bis `today`).
+ * Betrag mal Anteil geteilt durch Kurs in EUR mal EUR/CHF. Ohne Kurs oder Wechselkurs entsteht kein Kauf (kein erfundener Kurs).
+ * `have`: schon gekaufte "Schlüssel|Symbol". `late`: der erste verfügbare Kurs lag nach dem ersten Werktag.
+ */
+export function planBuys(o: { deposits: DepotDeposit[]; split: SplitPart[]; have: Set<string>; closes: Record<string, Close[]>; fx: Close[] | null; today: string }): Buy[] {
+  const out: Buy[] = [];
+  for (const dep of o.deposits) {
+    for (const part of o.split) {
+      if (o.have.has(`${dep.key}|${part.symbol}`)) continue;
+      const first = (o.closes[part.symbol] ?? []).filter((c) => c.date >= dep.date && c.date <= o.today && c.close > 0).sort((a, b) => a.date.localeCompare(b.date))[0];
+      if (!first) continue;
+      const fx = onOrBefore(o.fx ?? [], first.date)?.close;
+      if (!fx || !(fx > 0)) continue;
+      const chf = r2((dep.amount * part.pct) / 100);
+      out.push({ depositKey: dep.key, depositDate: dep.date, symbol: part.symbol, chf, shares: r6(chf / (first.close * fx)), price: first.close, fx, buyDate: first.date, late: first.date > nextWeekday(dep.date) });
+    }
+  }
+  return out;
+}
+
+/** Nur Käufe, deren Einzahlung noch zählt (nach dem letzten Handwert, nicht gelöscht). */
+export function validBuys<T extends { depositKey: string }>(buys: T[], deposits: DepotDeposit[]): T[] {
+  const keys = new Set(deposits.map((d) => d.key));
+  return buys.filter((b) => keys.has(b.depositKey));
+}
+export function lotsBySymbol(buys: { symbol: string; buyDate: string; shares: number }[]): Record<string, Lot[]> {
+  const out: Record<string, Lot[]> = {};
+  for (const b of buys) (out[b.symbol] ??= []).push({ date: b.buyDate, shares: b.shares });
   return out;
 }

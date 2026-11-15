@@ -5,7 +5,7 @@ import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema";
 import { addDays, todayInZone } from "../../shared/dates";
-import { AUTO_NOTE, depotHoldings, portfolioProduct, planPortfolioValues, depotConfig, depotRules, planValues, toDepotEntry, type NewValue } from "../../shared/depot";
+import { AUTO_NOTE, depositsAfter, depotHoldings, depotSplit, lotsBySymbol, planBuys, portfolioProduct, planPortfolioValues, depotConfig, depotRules, planValues, toDepotEntry, validBuys, type Buy, type Close, type NewValue } from "../../shared/depot";
 import { SETTING_DEFAULTS, type Settings } from "../../shared/settings";
 import { newId, nowIso, type Bindings, type Db } from "../util";
 import { ISIN, cboe, tradegate, frankfurter, type FxSource, type PriceSource } from "./kurse";
@@ -18,7 +18,7 @@ const WINDOW_DAYS = 10;
 const MAX_ROWS = 90;
 const RETRY_MIN = 55;
 
-const { investmentEntries, syncRuns, settings } = schema;
+const { investmentEntries, syncRuns, settings, depotBuys } = schema;
 
 export interface DepotDeps {
   fetcher?: typeof fetch;
@@ -62,21 +62,49 @@ export async function updateDepot(env: Bindings, deps: DepotDeps = {}): Promise<
     if (!holdings) return await done(false, "Portfolio Positionen unvollständig oder ungültig");
     const since = addDays(base.date, -WINDOW_DAYS);
     let plan: NewValue[];
+    let buyNote = "";
+    let bought = 0;
     if (holdings.length) {
       if (holdings.some(h => !(h.shares > 0) || ISIN.test(h.symbol))) return await done(false, "Kürzel und positive Anteile prüfen");
-      const positions = await Promise.all(holdings.map(async config => {
-        const product = portfolioProduct(config.symbol);
-        const held = deps.price
-          ? await deps.price.closes(config.exchange === "TRADEGATE" ? product!.isin : config.symbol, since, f)
-          : config.exchange === "TRADEGATE"
+      const rules = depotRules(s);
+      const split = depotSplit(s);
+      // Käufe aus Einzahlungen nur im reinen Tradegate Portfolio (sonst gäbe es keine Kursbasis).
+      const sparen = holdings.every(h => h.exchange === "TRADEGATE");
+      const symbols = [...new Set([...holdings.map(h => h.symbol), ...(sparen ? split.map(p => p.symbol) : [])])];
+      const fxCache = new Map<string, Promise<Close[]>>();
+      const fxOf = (cur: "USD" | "EUR") => (fxCache.get(cur) ?? fxCache.set(cur, fxSrc.rates(cur, since, f)).get(cur)!);
+      const eur = sparen ? await fxOf("EUR") : null;
+      const fetched: Record<string, Close[]> = {};
+      await Promise.all(symbols.map(async symbol => {
+        const holding = holdings.find(h => h.symbol === symbol);
+        const exchange = holding?.exchange ?? "TRADEGATE";
+        const product = portfolioProduct(symbol);
+        fetched[symbol] = deps.price
+          ? await deps.price.closes(exchange === "TRADEGATE" ? product!.isin : symbol, since, f)
+          : exchange === "TRADEGATE"
             ? await tradegate.closes(product!.isin, since, f, deps.now ?? new Date())
-            : await price.closes(config.symbol, since, f);
-        const rates = config.currency === "CHF" ? null : await fxSrc.rates(config.currency, since, f);
-        return { config, held, fx: rates };
+            : await price.closes(symbol, since, f);
       }));
+      let lots: ReturnType<typeof lotsBySymbol> = {};
+      if (sparen) {
+        const deposits = depositsAfter(entries, rules, today);
+        const existing = await db.select().from(depotBuys);
+        const have = new Set(existing.map(b => `${b.depositKey}|${b.symbol}`));
+        const fresh = planBuys({ deposits, split, have, closes: fetched, fx: eur, today });
+        await writeBuys(db, fresh);
+        bought = fresh.length;
+        lots = lotsBySymbol(validBuys([...existing, ...fresh], deposits));
+      }
+      const all = await Promise.all(symbols.map(async symbol => {
+        const config = holdings.find(h => h.symbol === symbol) ?? { symbol, shares: 0, currency: "EUR" as const, exchange: "TRADEGATE" as const };
+        return { config, held: fetched[symbol] ?? [], fx: config.currency === "CHF" ? null : await fxOf(config.currency), lots: lots[symbol] };
+      }));
+      const positions = all.filter(p => p.config.shares > 0 || (p.lots?.length ?? 0) > 0);
+      const kaeufe = bought ? ` · ${bought} ${bought === 1 ? "Kauf" : "Käufe"} aus Einzahlungen` : "";
       const missing = positions.filter(p => !p.held.length || (p.config.currency !== "CHF" && !p.fx?.length));
-      if (missing.length) return await done(false, `Kein vollständiger Kurs für ${missing.map(p => p.config.symbol).join(", ")}; kein neuer Gesamtwert`);
+      if (missing.length) return await done(false, `Kein vollständiger Kurs für ${missing.map(p => p.config.symbol).join(", ")}; kein neuer Gesamtwert${kaeufe}`, 0);
       plan = planPortfolioValues({ entries, today, positions }).slice(-MAX_ROWS);
+      buyNote = kaeufe;
     } else {
       const proxy = await price.closes(PROXY_SYMBOL, since, f);
       const usd = await fxSrc.rates("USD", since, f);
@@ -85,14 +113,20 @@ export async function updateDepot(env: Bindings, deps: DepotDeps = {}): Promise<
     }
     const exactUsed = plan.some((p) => !p.estimated);
     const note = holdings.some(h => h.exchange === "TRADEGATE") ? " · Bewertung Tradegate EUR in CHF" : "";
-    if (!plan.length) return await done(true, "Kein neuer Kurs" + note);
+    if (!plan.length) return await done(true, "Kein neuer Kurs" + note + buyNote);
     await write(db, plan);
     const last = plan.at(-1)!;
-    return await done(true, `${plan.length} ${plan.length === 1 ? "Wert" : "Werte"} bis ${last.date}, ${exactUsed ? "berechnet" : "geschätzt"}${note}`, plan.length);
+    return await done(true, `${plan.length} ${plan.length === 1 ? "Wert" : "Werte"} bis ${last.date}, ${exactUsed ? "berechnet" : "geschätzt"}${note}${buyNote}`, plan.length);
   } catch (e) {
     console.error("Depot-Abruf fehlgeschlagen:", (e as Error)?.name ?? "unbekannt");
     return await done(false, "Unerwarteter Fehler beim Depot-Abruf");
   }
+}
+
+/** Käufe festhalten; je Einzahlung und Symbol nie doppelt (eindeutiger Schlüssel, ein Doppel wird ignoriert). */
+async function writeBuys(db: Db, buys: Buy[]): Promise<void> {
+  if (!buys.length) return;
+  await db.batch(buys.map(b => db.insert(depotBuys).values({ id: newId(), ...b, updatedAt: nowIso() }).onConflictDoNothing()) as never);
 }
 
 /** Ersetzt nur Zeilen des Laufs; Handwerte desselben Tages bleiben und gehen vor. */
