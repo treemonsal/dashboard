@@ -367,7 +367,7 @@ export function buildServer(db: Db, scopes: readonly string[], env?: Bindings): 
       "money_summary",
       {
         title: "Money summary",
-        description: "Money summary for a month (default current, YYYY-MM): budget, own spending, what is left (after unrecorded amount), share of provisional bookings (not yet on a bank statement), unrecorded amount (difference to typed-in account balance), spending by category, amount still owed by mom for meals, depot value and account balances. No individual transactions.",
+        description: "Money summary for a month (default current, YYYY-MM): budget, own spending, what is left, provisional share, unrecorded amount, spending by category, owed by mom, depot value, account balances. No transactions.",
         inputSchema: z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional().describe("Month YYYY-MM") }),
         annotations: READ,
         _meta: meta("money_summary"),

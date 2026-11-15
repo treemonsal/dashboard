@@ -1,4 +1,4 @@
 # Stand Laufend
-- Fertig: Migration 0011 (nur additiv, lokal), reine Funktionen (Abgleich vorläufiger Buchungen, Betrag erkennen, Kontostand abgleichen) mit Tests, Server: Abgleich beim Import, vorläufige Buchungen von Hand, Löschen nur vorläufiger, Kontostand und Sammelbuchung, Eingangsroute POST /eingang/buchung mit Schlüssel, Limits und Sperre (Server-Tests grün).
-- Als Nächstes: Oberfläche (Kennzeichnung, Eingabe von Hand, Konto-Detail, Einrichtungsblatt), "Übrig" mit Zeile "nicht erfasst", Connector money_summary, Browser- und curl-Prüfung, Migration remote.
-- Nicht deployt, Migration noch nicht remote angewendet.
+- Fertig und geprüft: alle Teile 1 bis 5 (Server, Oberfläche, Connector), check und Tests grün, Browserprüfung (393x852, dunkel) und curl gegen wrangler dev mit lokalem Abzug der Echtdaten (inzwischen gelöscht). Migration 0011 remote angewendet, 77 Buchungen unverändert.
+- Offen beim Besitzer: Access-Freigabe für /eingang/buchung, Deploy, Schlüssel in der App erzeugen, Kurzbefehl einrichten.
+- Nicht deployt, keine Access-Regel geändert.

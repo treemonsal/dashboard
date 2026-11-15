@@ -334,7 +334,7 @@
   .money-n { font-weight: 700; letter-spacing: -0.035em; line-height: 1; display: inline-flex; align-items: baseline; }
   .money-n .cur { font-size: 0.42em; color: var(--fg2); font-weight: 600; letter-spacing: 0; margin-right: 0.35em; }
   .money-n .ct { font-size: 0.5em; color: var(--fg2); font-weight: 600; letter-spacing: 0; margin-left: 1px; }
-  .acts { display: flex; justify-content: center; gap: 22px; padding: 6px 0 4px; }
+  .acts { display: flex; justify-content: center; gap: 4px; padding: 6px 0 4px; }
   .act { display: grid; place-items: center; color: var(--fg); min-width: 64px; }
   .act i { width: 56px; height: 56px; border-radius: 50%; background: var(--card2); display: grid; place-items: center; }
   .act svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
