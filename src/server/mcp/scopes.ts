@@ -29,6 +29,7 @@ export const TOOL_SCOPES = {
   list_exams: "school",
   add_exam: "school",
   set_exam_topics: "school",
+  set_topic_summary: "school",
   list_grades: "school",
   add_grade: "school",
   grade_summary: "school",

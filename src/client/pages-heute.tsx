@@ -5,8 +5,7 @@ import { parseQuick } from "../shared/parse";
 import { describeRule } from "../shared/recurrence";
 import { Link } from "./router";
 import { useSheet } from "./sheet";
-import { ExamSheet, TagSheet, TaskLine, TrainingSheet } from "./sheets";
-import { GeldSheet, HealthSheet } from "./sheets2";
+import { TaskLine, TrainingSheet } from "./sheets";
 import { CheckMark, Icon, Money, Ring, Meter, PageTitle, nf, hm } from "./ui";
 import { useDay } from "./day";
 import { ExamsCard, GymCard, NotenCard, YearCard } from "./cards";
@@ -74,13 +73,13 @@ export function Heute() {
       </div>
 
       <div>
-        <button type="button" className="hero press" onClick={() => sheet.open(<TagSheet />)} aria-label="Heute öffnen">
+        <Link href={`/zeit/${d.today.slice(0, 4)}/${d.today.slice(5, 7)}/${d.today.slice(8, 10)}`} className="hero press" aria-label="Heute öffnen">
           <Ring done={d.done} total={d.total} />
           <span style={{ minWidth: 0 }}>
             <h1>{title}</h1>
             {nextText && <p>{nextText}</p>}
           </span>
-        </button>
+        </Link>
         {d.total === 0 && !d.loading && !d.error && <Link href="/aufgaben" className="chip btn press">Aufgabe hinzufügen</Link>}
       </div>
 
@@ -102,7 +101,7 @@ export function Heute() {
       </div>
 
       <div className="tiles">
-        <button type="button" className="tile press" onClick={() => sheet.open(<GeldSheet />)}>
+        <Link href={`/geld/analyse/${money.month}`} className="tile press">
           <span className="k">Übrig</span>
           <QueryNotice pending={money.loading} error={money.error} />
           {money.loaded && money.summary.hasData ? (
@@ -113,8 +112,8 @@ export function Heute() {
           ) : (
             <span className="v none">–</span>
           )}
-        </button>
-        <button type="button" className="tile press" onClick={() => sheet.open(<HealthSheet metric="sleep" />)}>
+        </Link>
+        <Link href="/koerper/schlaf" className="tile press">
           <span className="k">Schlaf</span>
           <QueryNotice pending={sleep.loading} error={sleep.error} />
           {sleepToday?.sleepMin != null ? (
@@ -126,8 +125,8 @@ export function Heute() {
           ) : (
             <span className="v none">–</span>
           )}
-        </button>
-        <button type="button" className="tile press" onClick={() => sheet.open(<HealthSheet metric="steps" />)}>
+        </Link>
+        <Link href="/koerper/schritte" className="tile press">
           <span className="k">Schritte</span>
           <QueryNotice pending={steps.loading} error={steps.error} />
           {stepsToday?.steps != null ? (
@@ -138,13 +137,13 @@ export function Heute() {
           ) : (
             <span className="v none">–</span>
           )}
-        </button>
+        </Link>
         {next && (
-          <button type="button" className="tile press" onClick={() => sheet.open(<ExamSheet id={next.id} />)}>
+          <Link href={`/ziele/pruefung/${next.id}`} className="tile press">
             <span className="k">Prüfung</span>
             <span className={`v ${daysUntil(next.date) < 15 ? "warn" : ""}`}>{daysUntil(next.date)}<small>Tage</small></span>
             <span className="k">{next.subjectCode}</span>
-          </button>
+          </Link>
         )}
       </div>
 

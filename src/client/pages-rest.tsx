@@ -5,13 +5,12 @@ import { FitbitEinstellungen, FitbitLeer } from "./fitbit";
 import { Trainings } from "./trainings";
 import { ErinnerungenEinstellungen, KalenderEinstellungen } from "./einstellungen-kalender";
 import { addDays, dayCompact, daysBetween, daysUntil, mondayOf, minutesOf, timeInZone, monthLong, WEEKDAY_LETTERS, WEEK_ORDER, weekdayNum } from "../shared/dates";
-import { byCategory, ownShare } from "../shared/geld";
+import { ownShare } from "../shared/geld";
 import { api } from "./api";
 import { Link } from "./router";
 import { useSheet } from "./sheet";
-import { ExamSheet, PlanSheet } from "./sheets";
-import { HealthSheet } from "./sheets2";
-import { DepotSheet, CatIcon, MamaSheet, SpendChart, TxRow, monthTitle, pctText, useDepot, useMama } from "./geld";
+import { PlanSheet } from "./sheets";
+import { SpendChart, TxRow, monthTitle, pctText, useDepot, useMama } from "./geld";
 import { DayToggles, DetailHead, Empty, Icon, Money, RoundAction, PageTitle, nf, hm } from "./ui";
 import { GymCard } from "./cards";
 import { useMonthMoney, useLatest } from "./lib";
@@ -24,7 +23,6 @@ const dayList = (s: string) => (s ? s.split(",").map(Number) : []);
 /* ---------- Geld ---------- */
 export function Geld() {
   const today = useToday();
-  const sheet = useSheet();
   const [month, setMonth] = useState(today.slice(0, 7));
   const m = useMonthMoney();
   const q = useTransactions(month);
@@ -45,7 +43,7 @@ export function Geld() {
       <PageTitle>Geld</PageTitle>
       <div className="center">
         <div className="lbl">Übrig</div>
-        {hasAny && q.isSuccess && m.loaded ? <Money v={m.budget - spent} size={52} /> : <span className="bigv faint" style={{ fontSize: 52 }}>–</span>}
+        {hasAny && q.isSuccess && m.loaded ? <Link href={`/geld/analyse/${month}`} className="press" aria-label="Analyse öffnen"><Money v={m.budget - spent} size={52} /></Link> : <span className="bigv faint" style={{ fontSize: 52 }}>–</span>}
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <button type="button" className="iconbtn press" aria-label="Voriger Monat" onClick={() => shift(-1)}><Icon n="back" /></button>
           <span className="chip">{month === today.slice(0, 7) ? "Diesen Monat" : `${monthTitle(month)} ${month.slice(0, 4)}`}</span>
@@ -54,17 +52,17 @@ export function Geld() {
       </div>
       <div className="acts">
         <UploadAction />
-        <RoundAction icon="chart" label="Analyse" href="/analyse" />
-        <RoundAction icon="coin" label="Portfolio" onClick={() => sheet.open(<DepotSheet />)} />
-        <RoundAction icon="fork" label="Offen von Mama" onClick={() => sheet.open(<MamaSheet />)} />
+        <RoundAction icon="chart" label="Analyse" href={`/geld/analyse/${month}`} />
+        <RoundAction icon="coin" label="Portfolio" href="/geld/depot" />
+        <RoundAction icon="fork" label="Offen von Mama" href="/geld/mama" />
       </div>
 
       <div className="card">
         <h2>Ausgegeben</h2>
         {!q.isSuccess || !allQuery.isSuccess || !m.loaded ? <QueryNotice pending={q.isPending || allQuery.isPending || m.loading} error={q.error ?? allQuery.error ?? m.error} /> : hasAny ? (
           <div style={{ paddingBottom: 14 }}>
-            <Money v={spent} size={34} />
-            <div style={{ marginTop: 10 }}><SpendChart txs={txs} month={month} budget={m.budget} today={today} /></div>
+            <Link href={`/geld/ausgegeben/${month}`} className="press" style={{ display: "inline-block" }} aria-label="Ausgegeben öffnen"><Money v={spent} size={34} /></Link>
+            <div style={{ marginTop: 10 }}><SpendChart txs={txs} month={month} budget={m.budget} today={today} dayHref={(d) => `/geld/tag/${d}`} /></div>
           </div>
         ) : (
           <div className="empty">Noch kein Export hochgeladen.</div>
@@ -72,102 +70,38 @@ export function Geld() {
       </div>
 
       {mama.any && (
-        <button type="button" className="card tap press" onClick={() => sheet.open(<MamaSheet />)}>
+        <Link href="/geld/mama" className="card tap press">
           <div className="lrow" style={{ borderTop: 0 }}>
             <span className="ic" style={{ background: "var(--card2)" }}><Icon n="fork" /></span>
             <span className="w"><b>Offen von Mama</b>{s.mamaName && <span>{s.mamaName}</span>}</span>
-            <span className="a"><Money v={mama.open} size={17} cur={false} /></span>
+            <span className="a"><Money v={mama.open} size={17} cur={false} /><Icon n="chev" className="go" /></span>
           </div>
-        </button>
+        </Link>
       )}
 
       <div className="card">
         <h2>Konten</h2>
         <QueryNotice pending={accountsQuery.isPending} error={accountsQuery.error} />
         <div className="acc" style={{ paddingBottom: 14 }}>
-          {accs.map((a) => (<span key={a.id}>{a.name}<b className={a.balance === 0 ? "none" : ""}>{a.balance === 0 ? "–" : nf(a.balance)}</b></span>))}
+          {accs.map((a) => (<Link key={a.id} href={`/geld/konto/${a.id}`} className="press">{a.name}<b className={a.balance === 0 ? "none" : ""}>{a.balance === 0 ? "–" : nf(a.balance)}</b></Link>))}
         </div>
       </div>
 
-      <button type="button" className="card tap press" onClick={() => sheet.open(<DepotSheet />)}>
+      <Link href="/geld/depot" className="card tap press">
         <h2>Portfolio</h2>
         <div style={{ paddingBottom: 14 }}>
           {dep.latest ? <Money v={dep.latest.value} size={30} /> : <span className="muted" style={{ fontSize: 15 }}>Startbestand eintragen</span>}
           {dep.latest && <div className={dep.latest.gain === 0 ? "muted" : dep.latest.gain > 0 ? "good" : "bad"} style={{ fontWeight: 600, fontSize: 15, marginTop: 2 }}><Money v={dep.latest.gain} size={17} cur={false} signed />{dep.pct !== null && <span style={{ marginLeft: 8 }}>{pctText(dep.pct)}</span>}</div>}
         </div>
-      </button>
+      </Link>
 
       {hasAny && (
         <div className="card">
           <h2>Buchungen</h2>
           {txs.slice(0, 8).map((t) => (<TxRow key={t.id} t={t} cats={cats} />))}
           {q.isSuccess && txs.length === 0 && <div className="empty">Keine Buchungen in diesem Monat.</div>}
-          {txs.length > 8 && <button type="button" className="more press" onClick={() => sheet.open(<AllTx month={month} />)}>Alle anzeigen</button>}
+          {txs.length > 8 && <Link href={`/geld/buchungen/${month}`} className="more press">Alle anzeigen</Link>}
         </div>
-      )}
-    </div>
-  );
-}
-
-function AllTx({ month }: { month: string }) {
-  const txQuery = useTransactions(month);
-  const txs = txQuery.data ?? [];
-  const cats = useCategories().data ?? [];
-  return (<div><h3>Buchungen</h3><div className="when">{monthTitle(month)}</div><QueryNotice pending={txQuery.isPending} error={txQuery.error} />{txs.map((t) => (<TxRow key={t.id} t={t} cats={cats} />))}</div>);
-}
-
-export function Analyse() {
-  const today = useToday();
-  const [month, setMonth] = useState(today.slice(0, 7));
-  const txQuery = useTransactions(month);
-  const txs = txQuery.data ?? [];
-  const cats = useCategories().data ?? [];
-  const days = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7), 0)).getUTCDate();
-  const weeks = [[1, 7], [8, 14], [15, 21], [22, 28], ...(days > 28 ? [[29, days]] : [])];
-  const sums = weeks.map(([a, b]) => txs.filter((t) => { const d = +t.date.slice(8, 10); return d >= a && d <= b; }).reduce((s, t) => s + ownShare(t), 0));
-  const mx = Math.max(1, ...sums);
-  const total = sums.reduce((a, b) => a + b, 0);
-  const by = byCategory(txs);
-  const shift = (n: number) => { const [y, mo] = month.split("-").map(Number); setMonth(new Date(Date.UTC(y, mo - 1 + n, 1)).toISOString().slice(0, 7)); };
-  return (
-    <div className="view">
-      <DetailHead title="Analyse" back="/geld" />
-      <div className="center">
-        {txs.length ? <Money v={total} size={44} /> : <span className="bigv faint" style={{ fontSize: 44 }}>–</span>}
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <button type="button" className="iconbtn press" aria-label="Voriger Monat" onClick={() => shift(-1)}><Icon n="back" /></button>
-          <span className="chip">{month === today.slice(0, 7) ? "Diesen Monat" : `${monthTitle(month)} ${month.slice(0, 4)}`}</span>
-          <button type="button" className="iconbtn press" aria-label="Nächster Monat" style={{ transform: "scaleX(-1)" }} disabled={month >= today.slice(0, 7)} onClick={() => shift(1)}><Icon n="back" /></button>
-        </div>
-      </div>
-      {!txQuery.isSuccess ? <QueryNotice pending={txQuery.isPending} error={txQuery.error} /> : txs.length === 0 ? (
-        <div className="card"><div className="empty">Keine Buchungen in diesem Monat.</div></div>
-      ) : (
-        <>
-          <div className="card">
-            <h2>Pro Woche</h2>
-            <div className="wbars">
-              {weeks.map(([a, b], i) => (
-                <div key={a}><span>{nf(sums[i])}</span><i style={{ height: `${(sums[i] / mx) * 80}%` }} /><span>{a}–{b}</span></div>
-              ))}
-            </div>
-            <div style={{ height: 14 }} />
-          </div>
-          <div className="card">
-            <h2>Kategorien</h2>
-            {by.map((b) => {
-              const c = cats.find((x) => x.id === b.categoryId);
-              const n = txs.filter((t) => (t.categoryId ?? null) === b.categoryId && ownShare(t) > 0).length;
-              return (
-                <div key={b.categoryId ?? "none"} className="lrow">
-                  <CatIcon name={c?.name} />
-                  <span className="w"><b>{c?.name ?? "Ohne Kategorie"}</b><span>{n} Buchungen · {Math.round((b.amount / total) * 100)} %</span></span>
-                  <span className="a"><Money v={b.amount} size={17} cur={false} /></span>
-                </div>
-              );
-            })}
-          </div>
-        </>
       )}
     </div>
   );
@@ -176,18 +110,17 @@ export function Analyse() {
 /* ---------- Körper ---------- */
 export function Koerper() {
   const today = useToday();
-  const sheet = useSheet();
   const sleep = useLatest("sleepMin");
   const steps = useLatest("steps");
   const hr = useLatest("restingHr");
   const w = useLatest("weightKg");
   const connected = [...sleep.rows, ...steps.rows, ...hr.rows].some((r) => r.source === "fitbit");
   const Stat = ({ k, metric, v, unit, day }: { k: string; metric: "sleep" | "steps" | "hr" | "weight"; v: string | null; unit?: string; day?: string }) => (
-    <button type="button" className="stat press" onClick={() => sheet.open(<HealthSheet metric={metric} />)}>
+    <Link href={`/koerper/${{ sleep: "schlaf", steps: "schritte", hr: "ruhepuls", weight: "gewicht" }[metric]}`} className="stat press">
       <span className="k">{k}</span>
       <span className={`v ${v === null ? "none" : ""}`}>{v ?? "–"}{v !== null && unit && <small>{unit}</small>}</span>
       {day && day !== today && <span className="k">{dayCompact(day)}</span>}
-    </button>
+    </Link>
   );
   return (
     <div className="view">
@@ -275,7 +208,6 @@ export function Zeit() {
   const examsQuery = useExams();
   const exams = examsQuery.data ?? [];
   const tasks = useTasks().data ?? [];
-  const sheet = useSheet();
   const y = Number(today.slice(0, 4));
   const examDays = new Set(exams.map((e) => e.date));
   const monday = mondayOf(today);
@@ -296,7 +228,7 @@ export function Zeit() {
             const n = new Date(Date.UTC(y, mi + 1, 0)).getUTCDate();
             const off = (weekdayNum(first) + 6) % 7;
             return (
-              <div key={mi}>
+              <Link key={mi} href={`/zeit/${y}/${String(mi + 1).padStart(2, "0")}`} className="press" aria-label={monthLong(mi + 1)}>
                 <div className="mn">{monthLong(mi + 1).slice(0, 3)}</div>
                 <div className="md">
                   {Array.from({ length: off }, (_, i) => (<span key={`o${i}`} />))}
@@ -305,7 +237,7 @@ export function Zeit() {
                     return <i key={d} className={d < today ? "p" : d === today ? "now" : examDays.has(d) ? "x" : ""} />;
                   })}
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>
@@ -317,11 +249,11 @@ export function Zeit() {
           {WEEK_ORDER.map((wd, i) => {
             const d = addDays(monday, i);
             return (
-              <div key={d} className={d < today ? "p" : d === today ? "now" : ""}>
+              <Link key={d} href={`/zeit/${d.slice(0, 4)}/${d.slice(5, 7)}/${d.slice(8, 10)}`} className={`press ${d < today ? "p" : d === today ? "now" : ""}`} aria-label={dayCompact(d)}>
                 <i />
                 {WEEKDAY_LETTERS[wd]}
                 <div style={{ fontSize: 10, marginTop: 2 }} className="faint">{workDays.includes(wd) ? "Lehre" : schoolDays.includes(wd) ? "Schule" : ""}</div>
-              </div>
+              </Link>
             );
           })}
         </div>
@@ -346,11 +278,11 @@ export function Zeit() {
         {exams.map((e) => {
           const n = daysUntil(e.date);
           return (
-            <button key={e.id} type="button" className="ex press" onClick={() => sheet.open(<ExamSheet id={e.id} />)}>
+            <Link key={e.id} href={`/ziele/pruefung/${e.id}`} className="ex press">
               <span className="f">{e.subjectCode}</span>
               <span className="w"><b>{e.title}</b><span>{dayCompact(e.date)}</span></span>
               <span className={`n${n < 15 ? " soon" : ""}`}>{n} T</span>
-            </button>
+            </Link>
           );
         })}
       </div>

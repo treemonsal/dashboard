@@ -57,7 +57,7 @@ Eine Oberfläche dafür gibt es noch nicht (gehört nicht zu diesem Auftrag).
 |---|---|
 | `tasks` | `today_overview`, `list_tasks`, `add_task`, `update_task`, `complete_task` |
 | `calendar` | `list_events` |
-| `school` | `list_exams`, `add_exam`, `set_exam_topics`, `list_grades`, `add_grade`, `grade_summary`, `get_timetable`, `set_timetable` |
+| `school` | `list_exams`, `add_exam`, `set_exam_topics`, `set_topic_summary`, `list_grades`, `add_grade`, `grade_summary`, `get_timetable`, `set_timetable` |
 | `gym` | `gym_week`, `log_workout` |
 | `money:read` | `money_summary` (nur Zusammenfassung, keine Einzelbuchungen) |
 | `health:read` | `health_summary` (nur Zusammenfassung) |

@@ -9,7 +9,8 @@ import type { LessonBlock } from "../shared/stundenplan";
 import { useSheet } from "./sheet";
 import { useSuggest } from "./suggest";
 import type { Suggestion } from "../shared/vorschlag";
-import { ExamSheet, TaskLine, TrainingSheet } from "./sheets";
+import { TaskLine, TrainingSheet } from "./sheets";
+import { Link } from "./router";
 import { useEvents, useExams, useGymDays, useGymPlans, useSubjects, useTasks, useTimetable, useToday } from "./queries";
 
 /** Zeile eines Termins im Tagesplan: gedämpft, ohne Abhak-Kreis, antippbar. */
@@ -49,12 +50,15 @@ export function LessonRow({ b, day }: { b: LessonBlock; day: string }) {
 }
 
 export function LessonSheet({ b, name, day }: { b: LessonBlock; name: string | null; day: string }) {
+  const sheet = useSheet();
+  const known = (useSubjects().data ?? []).some((s) => s.code === b.subject);
   return (
     <div>
       <h3>{name ? `${name} (${b.subject})` : b.subject}</h3>
       <div className="when">{dayCompact(day)}, {clockOf(b.startMin)}–{clockOf(b.endMin)}</div>
       {b.room && <div className="field"><span>Zimmer</span><span>{b.room}</span></div>}
       {b.teacher && <div className="field"><span>Lehrperson</span><span style={{ textAlign: "right", overflowWrap: "anywhere" }}>{b.teacher}</span></div>}
+      {known && <Link href={`/ziele/noten/${encodeURIComponent(b.subject)}`} className="field press" onClick={() => sheet.close()}><span>Noten</span><span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{b.subject} <Icon n="chev" className="go" /></span></Link>}
       {b.lessons > 1 && <div className="legend" style={{ marginTop: 16 }}>{b.lessons} Lektionen</div>}
     </div>
   );
@@ -84,9 +88,8 @@ export function dayItems(o: { day: string; tasks: Task[]; events: CalendarEvent[
 }
 
 function ExamRow({ exam }: { exam: Exam }) {
-  const sheet = useSheet();
   return (
-    <button type="button" className="slot press" onClick={() => sheet.open(<ExamSheet id={exam.id} />)}>
+    <Link href={`/ziele/pruefung/${exam.id}`} className="slot press">
       <span className="t">{exam.startTime ?? ""}</span>
       <span className="dot" style={{ background: "var(--fg)" }} />
       <span className="w">
@@ -94,7 +97,7 @@ function ExamRow({ exam }: { exam: Exam }) {
         {exam.room && <span>{exam.room}</span>}
       </span>
       <span />
-    </button>
+    </Link>
   );
 }
 
@@ -116,6 +119,7 @@ function Linked({ text }: { text: string }) {
 }
 
 export function EventSheet({ event: e, day }: { event: CalendarEvent; day: string }) {
+  const sheet = useSheet();
   const last = lastDayOf(e);
   const first = e.startDate;
   const time = e.allDay ? "ganztägig" : e.endTime && e.endTime !== e.startTime ? `${e.startTime}–${e.endTime}` : e.startTime;
@@ -138,8 +142,8 @@ export function EventSheet({ event: e, day }: { event: CalendarEvent; day: strin
           </p>
         </>
       )}
+      <Link href={`/zeit/${day.slice(0, 4)}/${day.slice(5, 7)}/${day.slice(8, 10)}`} className="field press" onClick={() => sheet.close()} style={{ marginTop: 8 }}><span>Gleicher Tag</span><span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{dayCompact(day)} <Icon n="chev" className="go" /></span></Link>
       <div className="legend" style={{ marginTop: 16 }}>{e.calendarName}</div>
-      <span hidden>{day}</span>
     </div>
   );
 }
@@ -212,7 +216,7 @@ export function Woche() {
         return (
           <div key={day} className={`card wkday ${isToday ? "today" : ""} ${day < today ? "past" : ""}`} data-day={day}>
             <h2>
-              <span className="wkd">{dayCompact(day)}</span>
+              <Link href={`/zeit/${day.slice(0, 4)}/${day.slice(5, 7)}/${day.slice(8, 10)}`} className="wkd press" style={{ display: "inline-flex", alignItems: "center", minHeight: 40 }}>{dayCompact(day)}</Link>
               {isToday && <span>heute</span>}
             </h2>
             {empty && (loading || error) ? null : empty ? (

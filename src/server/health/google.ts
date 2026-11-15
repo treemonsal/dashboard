@@ -1,6 +1,6 @@
 // Anbieter Google Health API (v4), Nachfolger der Fitbit Web API. Quellen und Entscheidung: docs/fitbit.md.
 import { addDays, daysBetween } from "../../shared/dates";
-import { mapExercise, mapRestingHr, mapSleep, mapSteps, mapWeight, toDays, type Acc } from "./map";
+import { mapExercise, mapRestingHr, mapSleep, mapSleepNights, mapSteps, mapWeight, toDays, type Acc } from "./map";
 import { shortHash } from "./crypto";
 import { HealthError, type FetchResult, type HealthEnv, type HealthProvider, type TokenSet } from "./types";
 
@@ -170,13 +170,18 @@ export const googleHealth: HealthProvider = {
     await run("Ruhepuls", async () => mapRestingHr(await listAll("daily-resting-heart-rate", rangeFilter("daily_resting_heart_rate.date")), acc));
     await run("Gewicht", async () => mapWeight(await listAll("weight", rangeFilter("weight.sample_time.civil_time")), acc));
     // Schlaf zählt zum Tag des Aufwachens: gefiltert wird nach dem Ende der Schlafphase. Seitengrösse bei Schlaf und Training höchstens 25.
-    await run("Schlaf", async () => mapSleep(await listAll("sleep", rangeFilter("sleep.interval.civil_end_time"), 25), acc));
+    let nights: FetchResult["nights"] = [];
+    await run("Schlaf", async () => {
+      const res = await listAll("sleep", rangeFilter("sleep.interval.civil_end_time"), 25);
+      mapSleep(res, acc);
+      nights = mapSleepNights(res);
+    });
 
     const workouts: FetchResult["workouts"] = [];
     await run("Training", async () => {
       const res = await listAll("exercise", rangeFilter("exercise.interval.civil_start_time"), 25);
       for (const w of mapExercise(res, (start) => start)) workouts.push({ ...w, id: `google:${await shortHash(w.startAt)}` });
     });
-    return { days: toDays(acc), workouts, problems };
+    return { days: toDays(acc), workouts, nights, problems };
   },
 };

@@ -161,7 +161,7 @@ export function buildServer(db: Db, scopes: readonly string[], env?: Bindings): 
       "list_exams",
       {
         title: "List exams",
-        description: "List school exams from a date (default today) with subject, date, time, room and topics with self-assessment (open, unsure, solid).",
+        description: "List school exams from a date (default today) with subject, date, time, room and topics with self-assessment (open, unsure, solid) and their summary text if one was written.",
         inputSchema: z.object({ from: date.optional(), to: date.optional() }),
         annotations: READ,
         _meta: meta("list_exams"),
@@ -209,6 +209,23 @@ export function buildServer(db: Db, scopes: readonly string[], env?: Bindings): 
         _meta: meta("set_exam_topics"),
       },
       async ({ examId, topics }) => run(() => d.setExamTopics(db, examId, topics)),
+    );
+  }
+
+  if (allowed("set_topic_summary")) {
+    server.registerTool(
+      "set_topic_summary",
+      {
+        title: "Set topic summary",
+        description: "Write the summary of one exam topic (shown on the topic page in the app). Replaces the previous summary; an empty text clears it. Use the topic id from list_exams. Plain text, at most 4000 characters.",
+        inputSchema: z.object({
+          topicId: z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/).describe("Topic id from list_exams"),
+          summary: z.string().max(4000),
+        }),
+        annotations: { ...WRITE, idempotentHint: true },
+        _meta: meta("set_topic_summary"),
+      },
+      async ({ topicId, summary }) => run(() => d.setTopicSummary(db, topicId, summary)),
     );
   }
 

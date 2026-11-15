@@ -1,7 +1,7 @@
 // Zuordnung der Antworten der Google Health API (v4) zu health_daily und health_workouts. Reine Funktionen.
 // Alle Tage in Europe/Zurich. Schlaf zählt zum Tag des Aufwachens (Ende der Schlafphase), nicht zum Einschlaftag.
 import { todayInZone } from "../../shared/dates";
-import type { DayValues, Workout } from "./types";
+import type { DayValues, SleepNight, Workout } from "./types";
 
 type Obj = Record<string, unknown>;
 const obj = (x: unknown): Obj | null => (x && typeof x === "object" ? (x as Obj) : null);
@@ -111,6 +111,52 @@ export function mapSleep(res: unknown, acc: Acc): void {
     sum.set(day, (sum.get(day) ?? 0) + min);
   }
   for (const [day, m] of sum) slot(acc, day).sleepMin = Math.min(1440, Math.round(m));
+}
+
+/**
+ * Nächte mit Zeiten und Phasen (Felder laut Discovery-Dokument: interval.startTime/endTime, stages[].type, summary.minutesAsleep/minutesAwake).
+ * Mehrere Schlafphasen am selben Aufwachtag: frühester Beginn, spätestes Ende, Minuten addiert. Nickerchen zählen nicht.
+ * Phasen nur, wenn die Antwort Stufen liefert; sonst bleiben sie null.
+ */
+export function mapSleepNights(res: unknown): SleepNight[] {
+  const by = new Map<string, SleepNight & { t0: number; t1: number }>();
+  for (const p of list(res, "dataPoints")) {
+    const s = obj(p.sleep);
+    if (!s || obj(s.metadata)?.nap === true) continue;
+    const iv = obj(s.interval);
+    const start = str(iv?.startTime), end = str(iv?.endTime);
+    const day = zurichDay(end);
+    if (!start || !end || !day) continue;
+    const a = Date.parse(start), b = Date.parse(end);
+    if (Number.isNaN(a) || Number.isNaN(b) || b <= a) continue;
+    const sum = obj(s.summary);
+    const stages = Array.isArray(s.stages) ? s.stages.map(obj).filter((x): x is Obj => !!x) : [];
+    const mins: Record<string, number> = {};
+    for (const g of stages) {
+      const ga = Date.parse(String(g.startTime)), gb = Date.parse(String(g.endTime));
+      if (Number.isNaN(ga) || Number.isNaN(gb) || gb <= ga) continue;
+      const k = String(g.type);
+      mins[k] = (mins[k] ?? 0) + (gb - ga) / 60_000;
+    }
+    const has = stages.length > 0;
+    const r = (k: string) => (has ? Math.round(mins[k] ?? 0) : null);
+    const asleep = num(sum?.minutesAsleep);
+    const awake = num(sum?.minutesAwake);
+    const add = (x: number | null, y: number | null) => (x === null && y === null ? null : (x ?? 0) + (y ?? 0));
+    const cur = by.get(day);
+    const row = { day, startAt: new Date(a).toISOString(), endAt: new Date(b).toISOString(), asleepMin: asleep, awakeMin: awake ?? (has ? r("AWAKE") : null), deepMin: r("DEEP"), lightMin: r("LIGHT"), remMin: r("REM"), t0: a, t1: b };
+    if (!cur) by.set(day, row);
+    else {
+      cur.asleepMin = add(cur.asleepMin, row.asleepMin);
+      cur.awakeMin = add(cur.awakeMin, row.awakeMin);
+      cur.deepMin = add(cur.deepMin, row.deepMin);
+      cur.lightMin = add(cur.lightMin, row.lightMin);
+      cur.remMin = add(cur.remMin, row.remMin);
+      if (a < cur.t0) { cur.t0 = a; cur.startAt = row.startAt; }
+      if (b > cur.t1) { cur.t1 = b; cur.endAt = row.endAt; }
+    }
+  }
+  return [...by.values()].map(({ t0: _a, t1: _b, ...n }) => n).sort((x, y) => x.day.localeCompare(y.day));
 }
 
 export function mapExercise(res: unknown, id: (startIso: string) => string): Workout[] {

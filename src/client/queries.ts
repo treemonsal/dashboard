@@ -153,6 +153,13 @@ export function useSetAssessment(examId: string) {
     also: [keys.exams],
   });
 }
+export function useSetTopicNotes(examId: string) {
+  return useOpt<{ topicId: string; notes: string | null }, S.ExamDetail>({
+    key: keys.exam(examId),
+    fn: ({ topicId, notes }) => api.topics.update(topicId, { notes }),
+    apply: (d, { topicId, notes }) => ({ ...d, topics: d.topics.map((t) => (t.id === topicId ? { ...t, notes } : t)) }),
+  });
+}
 export function useAddTopic(examId: string) {
   return useOpt<{ id: string; title: string }, S.ExamDetail>({
     key: keys.exam(examId),
@@ -160,7 +167,7 @@ export function useAddTopic(examId: string) {
     apply: (d, b) => ({
       ...d,
       topicCount: d.topicCount + 1,
-      topics: [...d.topics, { id: b.id, examId, title: b.title, assessment: 0, sortOrder: d.topics.length, createdAt: "", updatedAt: "" }],
+      topics: [...d.topics, { id: b.id, examId, title: b.title, assessment: 0, notes: null, summary: null, sortOrder: d.topics.length, createdAt: "", updatedAt: "" }],
     }),
     also: [keys.exams],
   });

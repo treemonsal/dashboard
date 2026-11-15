@@ -3,9 +3,10 @@ import { useEffect, useState, type AnchorHTMLAttributes } from "react";
 // Kleiner Router über die History-API. Reicht für eine Handvoll fester Pfade.
 const listeners = new Set<() => void>();
 
-export function navigate(to: string) {
+export function navigate(to: string, opts: { replace?: boolean } = {}) {
   if (to === location.pathname) return;
-  history.pushState(null, "", to);
+  if (opts.replace) history.replaceState(null, "", to);
+  else history.pushState(null, "", to);
   listeners.forEach((l) => l());
   document.getElementById("scroller")?.scrollTo(0, 0);
 }

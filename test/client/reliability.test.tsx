@@ -4,7 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { useDay } from "../../src/client/day";
 import { useLatest, useMonthMoney } from "../../src/client/lib";
-import { Plaene, Analyse } from "../../src/client/pages-rest";
+import { Plaene } from "../../src/client/pages-rest";
+import { GeldTiefe } from "../../src/client/geld-tiefe";
 import { Heute } from "../../src/client/pages-heute";
 import { HealthSheet, GeldSheet } from "../../src/client/sheets2";
 import { keys } from "../../src/client/queries";
@@ -28,7 +29,7 @@ async function fail(qc: QueryClient, key: readonly unknown[]) {
 describe("client read reliability", () => {
   it("does not advertise empty training plans or missing exports before reads complete", () => {
     expect(render(client(), createElement(Plaene))).not.toContain("Noch kein Trainingsplan");
-    expect(render(client(), createElement(Analyse))).not.toContain("Noch kein Export hochgeladen");
+    expect(render(client(), createElement(GeldTiefe, { path: "/geld/analyse" }))).not.toContain("Noch kein Export hochgeladen");
   });
   it("does not calculate a balance from fallback settings before the budget loads", () => {
     const qc = client(); qc.setQueryData(keys.tx(today.slice(0, 7)), []);

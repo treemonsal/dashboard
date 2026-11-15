@@ -4,6 +4,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, like, lte, ne, or, sql } from
 import { z } from "zod";
 import * as schema from "./db/schema";
 import { updateDepot } from "./depot/run";
+import { registerTiefe } from "./tiefe";
 import {
   SETTING_DEFAULTS,
   accountCreate,
@@ -82,7 +83,7 @@ function writePlan(planId: string, b: z.infer<typeof gymPlanWrite>, sortOrder?: 
 
 const toTx = (r: typeof t.transactions.$inferSelect) => ({
   id: r.id, accountId: r.accountId, categoryId: r.categoryId, date: r.date, amount: r.amount, description: r.description,
-  mealOut: r.mealOut, isRepayment: r.isRepayment, repaymentOverride: r.repaymentOverride, settledAt: r.settledAt, internal: r.internal, currency: r.currency,
+  mealOut: r.mealOut, isRepayment: r.isRepayment, repaymentOverride: r.repaymentOverride, settledAt: r.settledAt, internal: r.internal, currency: r.currency, bookedAt: r.bookedAt,
 });
 
 /** Kategorie "Essen auswärts" setzt "Mahlzeit auswärts" standardmässig, alles andere (auch Snack) nicht. */
@@ -98,6 +99,7 @@ export function registerExtra(api: Hono<AppEnv>) {
   registerPush(api);
   registerTimetable(api);
   registerHealth(api);
+  registerTiefe(api);
 
   /* ---------- Einstellungen ---------- */
   api.get("/settings", async (c) => {
@@ -293,7 +295,7 @@ export function registerExtra(api: Hono<AppEnv>) {
       .orderBy(asc(t.gymSessions.day));
     const out: Record<string, { day: string; weight: number }[]> = {};
     for (const r of rows) (out[r.name] ??= []).push({ day: r.day, weight: r.w });
-    for (const k of Object.keys(out)) out[k] = out[k].slice(-12);
+    if (c.req.query("all") !== "1") for (const k of Object.keys(out)) out[k] = out[k].slice(-12);
     return c.json(out);
   });
 

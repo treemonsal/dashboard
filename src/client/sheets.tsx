@@ -1,21 +1,19 @@
 // Inhalte der Blätter (zweite Ebene).
 import { QueryNotice, SaveNotice } from "./query-state";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { addDays, dayCompact, daysUntil, inDays, todayInZone, weekdayNum, WEEKDAY_LETTERS, WEEK_ORDER } from "../shared/dates";
-import { neededGrade, subjectMarks } from "../shared/calc";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { addDays, dayCompact, todayInZone, weekdayNum, WEEKDAY_LETTERS, WEEK_ORDER } from "../shared/dates";
 import { buildRule, describeRule, parseRepeat } from "../shared/recurrence";
 import type { GymPlan, GymSet, Task } from "../shared/schemas";
 import { useSheet } from "./sheet";
-import { navigate } from "./router";
-import { CheckMark, ConfirmDelete, DayToggles, Icon, Segments, Spark, nf } from "./ui";
+import { Link, navigate } from "./router";
+import { CheckMark, ConfirmDelete, DayToggles, Icon, Segments, Spark } from "./ui";
 import { SwipeRow } from "./swipe";
-import { useDay } from "./day";
 import { FitbitHinweis } from "./trainings";
 import type { Suggestion } from "../shared/vorschlag";
-import { subjectAverages } from "./lib";
+import { taskTopic } from "../shared/tiefe";
 import {
-  useAddGrade, useAddTopic, useCreateTask, useDeleteGrade, useDeletePlan, useDeleteTask, useExam, useFinishSession, useGrades, useGymDay, useGymHistory,
-  useGymPlans, usePlanStudy, useProjects, useRemoveSession, useSavePlan, useSetAssessment, useSetSubjectCounts, useStartSession, useSubjects, useTasks, useToday, useToggleTask,
+  useCreateTask, useDeletePlan, useDeleteTask, useExam, useFinishSession, useGymDay, useGymHistory,
+  useGymPlans, useProjects, useRemoveSession, useSavePlan, useStartSession, useTasks, useToday, useToggleTask,
   useUpdateSet, useUpdateTask,
 } from "./queries";
 
@@ -114,6 +112,21 @@ function RepeatField({ rule, dueDate, onChange }: { rule: string | null; dueDate
   );
 }
 
+/** Lernaufgabe aus einer Prüfung: Prüfung und Thema als antippbare Zeilen. */
+function ExamLinks({ task }: { task: Task }) {
+  const sheet = useSheet();
+  const q = useExam(task.examId ?? "");
+  if (!task.examId || !q.data) return null;
+  const e = q.data;
+  const topic = taskTopic(task, e.topics);
+  return (
+    <>
+      <Link href={`/ziele/pruefung/${e.id}`} className="field press" onClick={() => sheet.close()}><span>Prüfung</span><span style={{ textAlign: "right", display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 }}>{e.subjectCode}: {e.title} <Icon n="chev" className="go" /></span></Link>
+      {topic && <Link href={`/ziele/pruefung/${e.id}/${topic.id}`} className="field press" onClick={() => sheet.close()}><span>Thema</span><span style={{ textAlign: "right", display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 }}>{topic.title} <Icon n="chev" className="go" /></span></Link>}
+    </>
+  );
+}
+
 export function TaskSheet({ id }: { id: string }) {
   const sheet = useSheet();
   const today = useToday();
@@ -168,6 +181,7 @@ export function TaskSheet({ id }: { id: string }) {
           </select>
         </div>
       )}
+      <ExamLinks task={t} />
       <div style={{ borderTop: "1px solid var(--line)", paddingTop: 10 }}>
         <textarea className="inp" placeholder="Notiz" defaultValue={t.notes ?? ""} aria-label="Notiz" maxLength={10000}
           onBlur={(e) => { const v = e.target.value.trim() || null; if (v !== t.notes) set({ notes: v }); }} />
@@ -200,34 +214,6 @@ export function TaskSheet({ id }: { id: string }) {
       </div>
       <SaveNotice error={create.error ?? upd.error ?? del.error ?? toggle.error} />
       <span hidden>{today}</span>
-    </div>
-  );
-}
-
-/* ---------- Tag ---------- */
-export function TagSheet() {
-  const sheet = useSheet();
-  const d = useDay();
-  const open = d.list.filter((t) => !t.doneAt);
-  const done = d.list.filter((t) => t.doneAt);
-  const tr = d.training;
-  const trRow = tr && (
-    <button type="button" className={`slot press ${tr.done ? "done" : ""}`} style={{ gridTemplateColumns: "minmax(0,1fr) 44px" }} onClick={() => sheet.open(<TrainingSheet day={d.today} />)}>
-      <span className="w"><b>{tr.name}</b></span>
-      <span className="chkhit"><span className="chk"><CheckMark /></span></span>
-    </button>
-  );
-  return (
-    <div>
-      <h3>Heute</h3>
-      <QueryNotice pending={d.loading} error={d.error} />
-      {!d.loading && !d.error && <div className="when">{d.done} von {d.total} erledigt</div>}
-      {d.total === 0 && !d.loading && !d.error && <div className="empty">Nichts geplant.</div>}
-      {open.map((t) => (<TaskLine key={t.id} task={t} today={d.today} />))}
-      {tr && !tr.done && trRow}
-      {(done.length > 0 || tr?.done) && <div className="sec">Erledigt</div>}
-      {done.map((t) => (<TaskLine key={t.id} task={t} today={d.today} />))}
-      {tr?.done && trRow}
     </div>
   );
 }
@@ -394,135 +380,6 @@ function PlanEditor({ id }: { id: string | null }) {
       )}
       <button type="button" className="cta press" disabled={!valid || save.isPending} onClick={submit}>Speichern</button>
       {existing && <div style={{ marginTop: 10 }}><ConfirmDelete label="Plan löschen" onConfirm={() => { if (!del.isPending) del.mutate(existing.id, { onSuccess: sheet.close }); }} /></div>}
-    </div>
-  );
-}
-
-/* ---------- Prüfung ---------- */
-const ICONS = [
-  <svg key="0" viewBox="0 0 18 18"><circle cx="9" cy="9" r="5.5" /></svg>,
-  <svg key="1" viewBox="0 0 18 18"><path d="M3 11c2-5 4 3 6-2s4 3 6-2" /></svg>,
-  <svg key="2" viewBox="0 0 18 18"><path d="M3.5 9.5 7.2 13 14.5 5" /></svg>,
-];
-const LAB = ["offen", "unsicher", "sitzt"];
-
-export function ExamSheet({ id }: { id: string }) {
-  const q = useExam(id);
-  const set = useSetAssessment(id);
-  const add = useAddTopic(id);
-  const plan = usePlanStudy(id);
-  const taskQuery = useTasks();
-  const tasks = taskQuery.data ?? [];
-  const [topic, setTopic] = useState("");
-  const e = q.data;
-  if (!e) return <QueryNotice pending={q.isPending} error={q.error} />;
-  const planned = tasks.filter((t) => t.examId === id && !t.doneAt).length;
-  const n = e.topics.filter((t) => t.assessment === 2).length;
-  const u = e.topics.filter((t) => t.assessment === 1).length;
-  const when = [dayCompact(e.date), e.startTime, e.room].filter(Boolean).join(", ");
-  const days = daysUntil(e.date);
-  return (
-    <div>
-      <h3>{e.subjectCode}: {e.title}</h3>
-      <SaveNotice error={add.error ?? plan.error ?? set.error} />
-      <p className="when">
-        {when} · {inDays(days)}
-        {e.hint && <><br /><span className="warn">{e.hint}</span></>}
-      </p>
-      <div className="ready">{e.topics.map((t) => (<i key={t.id} className={`s${t.assessment}`} />))}</div>
-      <p className="legend">{n} sitzt, {u} unsicher, {e.topics.length - n - u} offen</p>
-      {e.topics.map((t) => (
-        <div key={t.id} className="tp">
-          <b>{t.title}</b>
-          <span className="seg tri">
-            {[0, 1, 2].map((k) => (
-              <button key={k} type="button" className="press" data-k={k} aria-label={LAB[k]} aria-pressed={t.assessment === k} onClick={() => set.mutate({ topicId: t.id, assessment: k as 0 | 1 | 2 })}>
-                <svg viewBox="0 0 18 18">{ICONS[k].props.children}</svg>
-              </button>
-            ))}
-          </span>
-        </div>
-      ))}
-      <form className="field" style={{ borderTop: "1px solid var(--line)" }} onSubmit={(ev) => {
-        ev.preventDefault();
-        const v = topic.trim();
-        if (!v || add.isPending) return;
-        add.mutate({ id: uid(), title: v }, { onSuccess: () => setTopic((current) => current === topic ? "" : current) });
-      }}>
-        <input className="inp grow" style={{ textAlign: "left", maxWidth: "100%" }} placeholder="Thema hinzufügen" value={topic} onChange={(ev) => setTopic(ev.target.value)} maxLength={300} />
-      </form>
-      <button type="button" className={`cta press ${plan.isPending ? "ghost" : ""}`} disabled={n === e.topics.length || days < 1 || plan.isPending || taskQuery.isPending || !!taskQuery.error} onClick={() => plan.mutate(planned > 0)}>
-        {plan.isPending ? "Wird eingeplant" : planned > 0 ? `Neu einplanen · ${planned} Blöcke` : "Lernblöcke einplanen"}
-      </button>
-    </div>
-  );
-}
-
-/* ---------- Fach ---------- */
-export function SubjectSheet({ id }: { id: string }) {
-  const subjectsQuery = useSubjects();
-  const gradesQuery = useGrades();
-  const subjects = subjectsQuery.data ?? [];
-  const grades = gradesQuery.data ?? [];
-  const add = useAddGrade();
-  const del = useDeleteGrade();
-  const setCounts = useSetSubjectCounts();
-  const today = useToday();
-  const row = useMemo(() => subjectAverages(subjects, grades).find((r) => r.subject.id === id), [subjects, grades, id]);
-  const [value, setValue] = useState("");
-  const [weight, setWeight] = useState("1");
-  const [date, setDate] = useState(today);
-  const [title, setTitle] = useState("");
-  const [target, setTarget] = useState("4.5");
-  const [rw, setRw] = useState("1");
-  if (!row || gradesQuery.isPending || gradesQuery.error) return <QueryNotice pending={subjectsQuery.isPending || gradesQuery.isPending} error={subjectsQuery.error ?? gradesQuery.error} />;
-  const v = num(value);
-  const w = num(weight);
-  const valid = v !== null && v >= 1 && v <= 6 && w !== null && w > 0 && !!date;
-  const tg = num(target);
-  const need = tg !== null && num(rw) ? neededGrade(row.grades, tg, num(rw)!) : null;
-  const avg = row.avg;
-  const counts = row.counts;
-  const marks = subjectMarks(avg);
-  return (
-    <div>
-      <h3>{row.subject.code}</h3>
-      <SaveNotice error={add.error ?? del.error ?? setCounts.error} />
-      <div className="yh" style={{ paddingTop: 4 }}>
-        <b className={counts ? (avg !== null && avg < 4 ? "bad" : "") : "faint"}>{avg === null ? "–" : nf(avg, 2)}</b>
-        <span>Schnitt</span>
-      </div>
-      {marks && counts && <div className="muted" style={{ paddingBottom: 8 }}>genau {nf(marks.exact, 2)}, Zeugnis {nf(marks.certificate, 1)}</div>}
-      {row.grades.length === 0 && <div className="empty" style={{ paddingTop: 0 }}>Noch keine Note.</div>}
-      {row.grades.map((g) => (
-        <div key={g.id} className="row">
-          <div className="l"><b>{nf(g.value, 1)}{g.weight !== 1 ? <span className="faint"> × {nf(g.weight, 1)}</span> : null}</b><span>{dayCompact(g.date)}{g.title ? ` · ${g.title}` : ""}</span></div>
-          <button type="button" className="iconbtn press" aria-label="Note löschen" onClick={() => del.mutate(g.id)}><Icon n="trash" /></button>
-        </div>
-      ))}
-      <div className="field">
-        <span>Zählt zum Schnitt</span>
-        <Segments full={false} label="Zählt zum Schnitt" value={counts ? "1" : "0"} onChange={(v) => setCounts.mutate({ id, counts: v === "1" })} options={[{ v: "0", label: "Aus" }, { v: "1", label: "An" }]} />
-      </div>
-      <div className="sec">Note hinzufügen</div>
-      <div className="field"><label htmlFor="g-v">Note</label><input id="g-v" className="inp num" inputMode="decimal" placeholder="4.5" value={value} onChange={(e) => setValue(e.target.value)} /></div>
-      <div className="field"><label htmlFor="g-w">Gewicht</label><input id="g-w" className="inp num" inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} /></div>
-      <div className="field"><label htmlFor="g-d">Datum</label><input id="g-d" className="inp" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-      <div className="field"><label htmlFor="g-t">Bezeichnung</label><input id="g-t" className="inp" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300} /></div>
-      <button type="button" className="cta press" disabled={!valid || add.isPending} onClick={() => {
-        add.mutate({ id: uid(), subjectId: id, value: Math.round(v! * 100) / 100, weight: w!, date, title: title.trim() || null }, { onSuccess: () => { setValue((current) => current === value ? "" : current); setTitle((current) => current === title ? "" : current); } });
-      }}>Hinzufügen</button>
-      {counts && <>
-      <div className="sec">Welche Note brauche ich?</div>
-      <div className="field"><label htmlFor="r-t">Schnitt</label><input id="r-t" className="inp num" inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} /></div>
-      <div className="field"><label htmlFor="r-w">Gewicht der Prüfung</label><input id="r-w" className="inp num" inputMode="decimal" value={rw} onChange={(e) => setRw(e.target.value)} /></div>
-      <div className="yh" style={{ paddingBottom: 0 }}>
-        {need?.kind === "need" && <><b>{nf(need.value, 1)}</b><span>nötig</span></>}
-        {need?.kind === "reached" && <b style={{ fontSize: 22 }} className="good">Schon erreicht</b>}
-        {need?.kind === "impossible" && <b style={{ fontSize: 22 }} className="bad">Nicht mehr erreichbar</b>}
-        {!need && <b className="faint">–</b>}
-      </div>
-      </>}
     </div>
   );
 }

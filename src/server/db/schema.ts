@@ -71,6 +71,9 @@ export const examTopics = sqliteTable(
     title: text("title").notNull(),
     // 0 = offen, 1 = unsicher, 2 = sitzt
     assessment: integer("assessment").notNull().default(0),
+    // Eigene Notiz des Besitzers (Themenseite) und Zusammenfassung, die später über den Connector eingetragen wird
+    notes: text("notes"),
+    summary: text("summary"),
     sortOrder: integer("sort_order").notNull().default(0),
     ...timestamps,
   },
@@ -446,3 +449,16 @@ export const healthWorkouts = sqliteTable(
   },
   (t) => [index("health_workouts_day_idx").on(t.day)],
 );
+
+// Eine Nacht aus Google Health (Schlaf zählt zum Tag des Aufwachens). Zeiten als UTC-ISO, Minuten je Phase falls geliefert.
+export const healthSleep = sqliteTable("health_sleep", {
+  day: text("day").primaryKey(),
+  startAt: text("start_at").notNull(),
+  endAt: text("end_at").notNull(),
+  asleepMin: integer("asleep_min"),
+  awakeMin: integer("awake_min"),
+  deepMin: integer("deep_min"),
+  lightMin: integer("light_min"),
+  remMin: integer("rem_min"),
+  ...timestamps,
+});

@@ -357,3 +357,50 @@
   .wbars > div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; font-size: var(--t-2xs); color: var(--fg2); }
   .wbars i { display: block; width: 100%; border-radius: 8px; background: var(--fg); min-height: 3px; }
 }
+
+/* ---------- Tiefe: Standortzeile, tippbare Balken und Zeilen ---------- */
+@layer components {
+  .crumbs { display: flex; align-items: center; gap: 2px; overflow-x: auto; scrollbar-width: none; padding: 0 2px; margin-top: -4px; min-height: 36px; white-space: nowrap; }
+  .crumbs::-webkit-scrollbar { display: none; }
+  .crumbs .cr { display: inline-flex; align-items: center; gap: 2px; flex: none; font-size: var(--t-sm); }
+  .crumbs i { font-style: normal; color: var(--fg3); padding: 0 4px; }
+  .crumbs a { display: inline-flex; align-items: center; min-height: 36px; padding: 0 6px; color: var(--fg2); font-weight: 500; }
+  .crumbs b { padding: 0 6px; font-weight: 600; color: var(--fg); }
+  .wbars > a, .wbars > button { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; font-size: var(--t-2xs); color: var(--fg2); min-width: 0; }
+  .wbars > a:focus-visible i, .wbars > button[aria-pressed="true"] i { box-shadow: 0 0 0 2px var(--fg3); }
+  .wbars i.dim { background: var(--fg3); }
+  .lrow.nopic { grid-template-columns: minmax(0, 1fr) auto; }
+  .lrow .a small { display: block; font-size: var(--t-xs); color: var(--fg2); font-weight: 500; }
+  .go { width: 16px; height: 16px; stroke: var(--fg3); fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; margin-left: 6px; flex: none; }
+  .lrow .a { display: inline-flex; align-items: center; justify-content: flex-end; }
+  .kv { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; min-height: 48px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .kv:first-of-type { border-top: 0; }
+  .kv > span:first-child { color: var(--fg2); font-size: var(--t-md); flex: none; }
+  .kv > span:last-child { display: inline-flex; align-items: center; justify-content: flex-end; flex-wrap: nowrap; }
+  .daysel > span { display: inline-flex; align-items: center; white-space: nowrap; gap: 4px; }
+  .kv > span:last-child, .kv > a:last-child { text-align: right; min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+  a.kv { width: 100%; }
+  .orig { margin: 0; padding: 4px 0 14px; color: var(--fg2); font-size: var(--t-sm); line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .pick { position: relative; }
+  .pick .cursor { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--fg2); border-radius: 1px; pointer-events: none; transform: translateX(-1px); }
+  .daysel { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 4px 0; font-size: var(--t-sm); color: var(--fg2); }
+  .daysel b { color: var(--fg); font-weight: 600; }
+}
+
+/* ---------- Zeit: Monatsraster ---------- */
+@layer components {
+  .calh, .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .calh { padding: 12px 0 6px; font-size: var(--t-2xs); color: var(--fg3); text-align: center; }
+  .cal > a { aspect-ratio: 1; border-radius: 12px; background: var(--card2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; position: relative; font-size: var(--t-sm); min-width: 0; }
+  .cal > a.p { color: var(--fg2); }
+  .cal > a b { font-weight: 600; }
+  .cal > a.now { box-shadow: inset 0 0 0 1.5px var(--fg); }
+  .cal > a.g { background: var(--fg); color: #000; }
+  .cal > a.x::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: 5px; height: 2px; border-radius: 1px; background: var(--fg); }
+  .cal > a.g.x::after { background: #000; }
+  .cal .mk { display: flex; gap: 3px; height: 5px; }
+  .cal .mk i { width: 5px; height: 5px; border-radius: 50%; background: var(--fg2); }
+  .cal .mk i.o { background: none; box-shadow: inset 0 0 0 1.2px var(--fg2); }
+  .cal > a.g .mk i { background: #000; } .cal > a.g .mk i.o { background: none; box-shadow: inset 0 0 0 1.2px #000; }
+  .months > a { display: block; }
+}

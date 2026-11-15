@@ -106,6 +106,7 @@ export const api = {
     removeSession: (day: string) => del(`/gym/sessions/${day}`),
     updateSet: (id: string, b: { done?: boolean; weight?: number | null; reps?: number }) => patch<S.GymSet>(`/gym/sets/${id}`, b),
     history: () => get<Record<string, S.GymHistoryPoint[]>>("/gym/history"),
+    historyAll: () => get<Record<string, S.GymHistoryPoint[]>>("/gym/history?all=1"),
   },
   money: {
     accounts: () => get<S.Account[]>("/accounts"),
@@ -115,6 +116,7 @@ export const api = {
     invest: () => get<S.InvestmentEntry[]>("/invest"),
     addInvest: (b: S.InvestmentEntryCreate) => post<S.InvestmentEntry>("/invest", b),
     removeInvest: (id: string) => del(`/invest/${id}`),
+    depotKurse: () => get<{ symbol: string; close: number | null; date: string | null; fx: number | null }[]>("/depot/kurse"),
     depotRefresh: () => post<{ ok: boolean; message: string; added: number }>("/depot/refresh", {}),
   },
   health: {

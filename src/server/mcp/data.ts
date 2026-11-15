@@ -188,7 +188,7 @@ async function examsWithTopics(db: Db, where: SQL | undefined) {
     endTime: e.endTime,
     room: e.room,
     status: e.status,
-    topics: topics.filter((x) => x.examId === e.id).map((x) => ({ id: x.id, title: x.title, assessment: ASSESS[x.assessment] ?? "open" })),
+    topics: topics.filter((x) => x.examId === e.id).map((x) => ({ id: x.id, title: x.title, assessment: ASSESS[x.assessment] ?? "open", summary: x.summary ?? null })),
   }));
 }
 
@@ -240,6 +240,15 @@ export async function setExamTopics(db: Db, examId: string, topics: { title: str
   }
   if (stmts.length) await db.batch(stmts as never);
   return { added, changed, exam: (await examsWithTopics(db, eq(t.exams.id, examId)))[0] };
+}
+
+/** Zusammenfassung eines Themas setzen (ersetzt die bisherige; leer löscht sie). Themen-ID aus list_exams. */
+export async function setTopicSummary(db: Db, topicId: string, summary: string) {
+  const row = await db.select().from(t.examTopics).where(eq(t.examTopics.id, topicId)).get();
+  if (!row) throw new ToolInputError(`Thema ${topicId} gibt es nicht.`);
+  const text = summary.trim();
+  await db.update(t.examTopics).set({ summary: text || null, updatedAt: nowIso() }).where(eq(t.examTopics.id, topicId));
+  return { topicId, title: row.title, summary: text || null, length: text.length };
 }
 
 export async function listGrades(db: Db, q: { subject?: string; limit: number }) {

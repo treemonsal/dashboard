@@ -1,9 +1,8 @@
 // Trainings aus Fitbit: Liste im Körper-Tab, Unterseite nach Wochen, Blatt je Training, Hinweis im Trainingsblatt.
 import { useQuery } from "@tanstack/react-query";
 import { addDays, dayCompact, mondayOf, todayInZone } from "../shared/dates";
-import { DetailHead, Icon, Segments, nf } from "./ui";
-import { navigate } from "./router";
-import { useSheet } from "./sheet";
+import { Icon, Segments, nf } from "./ui";
+import { Link } from "./router";
 import { call } from "./fitbit-setup";
 import { useFinishSession, useGymDay, useSetSetting, useSettings } from "./queries";
 
@@ -78,16 +77,15 @@ function ViewPill() {
   return <Segments full={false} label="Ansicht" value={view} onChange={set} options={[{ v: "sport", label: "Sport" }, { v: "alle", label: "Alle" }]} />;
 }
 function Row({ w }: { w: WorkoutRow }) {
-  const sheet = useSheet();
   return (
-    <button type="button" className="lrow press" onClick={() => sheet.open(<WorkoutSheet w={w} />)}>
+    <Link href={`/koerper/trainings/woche/${mondayOf(w.day)}/${encodeURIComponent(w.id)}`} className="lrow press">
       <span className="ic"><Icon n={workoutIcon(w)} /></span>
       <span className="w">
         <b>{workoutTitle(w)}</b>
         <span>{dayCompact(w.day)} · {clock(w.startAt)}</span>
       </span>
-      <span className="a muted" style={{ fontSize: 14 }}>{w.minutes !== null ? fmtMin(w.minutes) : ""}</span>
-    </button>
+      <span className="a muted" style={{ fontSize: 14 }}>{w.minutes !== null ? fmtMin(w.minutes) : ""}<Icon n="chev" className="go" /></span>
+    </Link>
   );
 }
 function useList() {
@@ -110,37 +108,9 @@ export function Trainings() {
       {list.slice(0, 5).map((w) => <Row key={w.id} w={w} />)}
       {list.length > 5 && (
         <div className="empty" style={{ padding: "4px 0 8px" }}>
-          <button type="button" className="link" onClick={() => navigate("/trainings")}>Alle anzeigen</button>
+          <Link href="/koerper/trainings" className="link">Alle anzeigen</Link>
         </div>
       )}
-    </div>
-  );
-}
-
-/** Unterseite: alle Trainings der gewählten Ansicht, nach Wochen. */
-export function TrainingsListe() {
-  const { list } = useList();
-  const weeks: { monday: string; rows: WorkoutRow[] }[] = [];
-  for (const w of list) {
-    const m = mondayOf(w.day);
-    const last = weeks.at(-1);
-    last && last.monday === m ? last.rows.push(w) : weeks.push({ monday: m, rows: [w] });
-  }
-  const nd = (d: string) => dayCompact(d).slice(3);
-  return (
-    <div className="view">
-      <DetailHead title="Trainings" back="/koerper" />
-      <div className="viewpill"><ViewPill /></div>
-      {weeks.length === 0 && <div className="card"><div className="empty">Kein Sport erkannt.</div></div>}
-      {weeks.map((wk) => (
-        <div key={wk.monday} className="card">
-          <h2>
-            <span>{nd(wk.monday)} bis {nd(addDays(wk.monday, 6))}</span>
-            <span>{wk.rows.length} {wk.rows.length === 1 ? "Training" : "Trainings"}</span>
-          </h2>
-          {wk.rows.map((w) => <Row key={w.id} w={w} />)}
-        </div>
-      ))}
     </div>
   );
 }

@@ -81,7 +81,7 @@ export const examCreate = z
 export const examUpdate = z.object({ subjectId: id.optional(), ...examFields }).partial();
 
 export const examTopicCreate = z.object({ id: id.optional(), title: text(300), assessment: assessment.optional(), sortOrder: z.number().int().optional() });
-export const examTopicUpdate = examTopicCreate.omit({ id: true }).partial();
+export const examTopicUpdate = examTopicCreate.omit({ id: true }).extend({ notes: z.string().max(4000).nullable() }).partial();
 
 /* ---------- Noten ---------- */
 export const gradeCreate = z
@@ -387,6 +387,10 @@ export interface ExamTopic extends Stamped {
   examId: string;
   title: string;
   assessment: Assessment;
+  /** Eigene Notiz zum Thema */
+  notes: string | null;
+  /** Zusammenfassung, nur über den Connector gesetzt */
+  summary: string | null;
   sortOrder: number;
 }
 
@@ -557,6 +561,8 @@ export interface Transaction {
   settledAt: string | null;
   internal: boolean;
   currency: string;
+  /** Verbuchungszeit laut Bank, falls vorhanden */
+  bookedAt?: string | null;
 }
 
 export interface HealthDay {

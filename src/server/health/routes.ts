@@ -12,7 +12,7 @@ import { SCOPES } from "./google";
 import { PROVIDER, KIND, disconnectHealth, saveConnection, syncHealth, syncIfStale } from "./sync";
 import { HealthError, type HealthEnv } from "./types";
 
-const { healthConnection, healthOauthState, healthWorkouts, syncRuns, settings } = schema;
+const { healthConnection, healthOauthState, healthSleep, healthWorkouts, syncRuns, settings } = schema;
 const SETUP_KEY = "fitbitSetup";
 export const SETUP_STEPS = 7;
 const STATE_TTL_MS = 10 * 60_000;
@@ -153,6 +153,16 @@ export function registerHealth(api: Hono<AppEnv>) {
   api.post("/fitbit/sync-if-stale", async (c) => c.json(await syncIfStale(c.env as HealthEnv)));
 
   api.delete("/fitbit/connection", async (c) => c.json({ ok: await disconnectHealth(c.env as HealthEnv) }));
+
+  api.get("/fitbit/sleep", v("query", z.object({ from: isoDate.optional(), to: isoDate.optional() })), async (c) => {
+    const { from, to } = c.req.valid("query");
+    const rows = await c.var.db
+      .select()
+      .from(healthSleep)
+      .where(and(from ? gte(healthSleep.day, from) : undefined, to ? lte(healthSleep.day, to) : undefined))
+      .orderBy(asc(healthSleep.day));
+    return c.json(rows.map(({ createdAt: _c, updatedAt: _u, ...r }) => r));
+  });
 
   api.get("/fitbit/workouts", v("query", z.object({ from: isoDate.optional(), to: isoDate.optional() })), async (c) => {
     const { from, to } = c.req.valid("query");

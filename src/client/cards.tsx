@@ -2,8 +2,6 @@
 import { QueryNotice } from "./query-state";
 import { Link } from "./router";
 import { dayCompact, daysUntil, mondayOf, addDays, weekdayNum } from "../shared/dates";
-import { useSheet } from "./sheet";
-import { ExamSheet, SubjectSheet, TrainingSheet } from "./sheets";
 import { Icon, nf } from "./ui";
 import { gesamt, subjectAverages } from "./lib";
 import { useExams, useGrades, useGymDays, useGymPlans, useSettings, useSubjects, useToday } from "./queries";
@@ -33,7 +31,6 @@ export function YearCard() {
 
 export function GymCard() {
   const today = useToday();
-  const sheet = useSheet();
   const goal = Number(useSettings().gymGoal);
   const gym = useGymDays(16);
   const { from, done } = gym;
@@ -49,7 +46,7 @@ export function GymCard() {
   return (
     <div className="card">
       <h2>
-        <span>Gym</span>
+        <Link href="/ziele/gym" className="press" style={{ display: "inline-flex", alignItems: "center", minHeight: 40 }}>Gym</Link>
         <span>
           <span className="wk" aria-hidden="true">
             {week.map((d, r) => (
@@ -65,7 +62,7 @@ export function GymCard() {
           d > today ? (
             <i key={d} className="f" />
           ) : (
-            <button key={d} type="button" className={`press ${done.has(d) ? "g" : ""} ${d === today ? "t" : ""} ${r === 6 ? "s" : ""} ${d < today && d >= since && planned.has(weekdayNum(d)) ? "m" : ""}`} aria-label={`${dayCompact(d)}${done.has(d) ? ", Training" : planned.has(weekdayNum(d)) && d < today && d >= since ? ", verpasst" : ""}`} onClick={() => sheet.open(<TrainingSheet day={d} />)} />
+            <Link key={d} href={`/ziele/gym/${mondayOf(d)}/${d}`} className={`press ${done.has(d) ? "g" : ""} ${d === today ? "t" : ""} ${r === 6 ? "s" : ""} ${d < today && d >= since && planned.has(weekdayNum(d)) ? "m" : ""}`} aria-label={`${dayCompact(d)}${done.has(d) ? ", Training" : planned.has(weekdayNum(d)) && d < today && d >= since ? ", verpasst" : ""}`} />
           ),
         )}
       </div>
@@ -79,7 +76,6 @@ export function GymCard() {
 export function ExamsCard({ limit = 4 }: { limit?: number }) {
   const examQuery = useExams();
   const exams = examQuery.data ?? [];
-  const sheet = useSheet();
   if (!examQuery.isSuccess) return <div className="card"><h2>Prüfungen</h2><QueryNotice pending={examQuery.isPending} error={examQuery.error} /></div>;
   if (!exams.length) return null;
   return (
@@ -89,14 +85,14 @@ export function ExamsCard({ limit = 4 }: { limit?: number }) {
         {exams.slice(0, limit).map((e) => {
           const n = daysUntil(e.date);
           return (
-            <button key={e.id} type="button" className="ex press" onClick={() => sheet.open(<ExamSheet id={e.id} />)}>
+            <Link key={e.id} href={`/ziele/pruefung/${e.id}`} className="ex press">
               <span className="f">{e.subjectCode}</span>
               <span className="w">
                 <b>{e.title}</b>
                 <span>{dayCompact(e.date)}</span>
               </span>
               <span className={`n${n < 15 ? " soon" : ""}`}>{n} T</span>
-            </button>
+            </Link>
           );
         })}
       </div>
@@ -109,7 +105,6 @@ export function NotenCard() {
   const gradesQuery = useGrades();
   const subjects = subjectsQuery.data ?? [];
   const grades = gradesQuery.data ?? [];
-  const sheet = useSheet();
   const rows = subjectAverages(subjects, grades);
   if (!subjectsQuery.isSuccess || !gradesQuery.isSuccess) return <div className="card"><h2>Noten</h2><QueryNotice pending={subjectsQuery.isPending || gradesQuery.isPending} error={subjectsQuery.error ?? gradesQuery.error} /></div>;
   const avg = gesamt(rows);
@@ -121,25 +116,25 @@ export function NotenCard() {
       <h2>
         Noten
       </h2>
-      <div className="yh">
+      <Link href="/ziele/noten" className="yh press" aria-label="Noten öffnen">
         <b>{avg === null ? "–" : nf(avg, 1)}</b>
         <span>Schnitt</span>
-      </div>
+      </Link>
       <div style={{ paddingBottom: 8 }}>
         {counted.map((r) => (
-          <button key={r.subject.id} type="button" className={`gr press${r.avg !== null && r.avg < 4 ? " bad" : ""}`} onClick={() => sheet.open(<SubjectSheet id={r.subject.id} />)}>
+          <Link key={r.subject.id} href={`/ziele/noten/${encodeURIComponent(r.subject.code)}`} className={`gr press${r.avg !== null && r.avg < 4 ? " bad" : ""}`}>
             <span>{r.subject.code}</span>
             <span className="tk">{r.avg !== null && <i style={{ width: `${((r.avg - 1) / 5) * 100}%` }} />}</span>
             <span className={r.avg === null ? "none" : ""}>{r.avg === null ? "–" : nf(r.avg, 1)}</span>
-          </button>
+          </Link>
         ))}
         {info.length > 0 && <div className="grinfo" role="group" aria-label="Zählt nicht zum Schnitt">
           {info.map((r) => (
-            <button key={r.subject.id} type="button" className="gr info press" onClick={() => sheet.open(<SubjectSheet id={r.subject.id} />)}>
+            <Link key={r.subject.id} href={`/ziele/noten/${encodeURIComponent(r.subject.code)}`} className="gr info press">
               <span>{r.subject.code}</span>
               <span className="tk"><i style={{ width: `${((r.avg! - 1) / 5) * 100}%` }} /></span>
               <span>{nf(r.avg!, 1)}</span>
-            </button>
+            </Link>
           ))}
         </div>}
       </div>

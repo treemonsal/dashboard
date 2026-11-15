@@ -194,6 +194,19 @@ describe("Schule", () => {
     expect(r.exams[0]).toMatchObject({ id: "exam-1", subject: "M", title: "Funktionen", daysUntil: 3 });
   });
 
+  it("set_topic_summary: setzt, ersetzt und löscht die Zusammenfassung, list_exams zeigt sie", async () => {
+    const c = await ok("add_exam", { subject: "e", title: "Unit 9", date: addDays(today, 12), topics: ["Passive"] });
+    const topicId = c.created.topics[0].id;
+    expect(c.created.topics[0].summary).toBeNull();
+    const r = await ok("set_topic_summary", { topicId, summary: "  Passiv: be + Partizip.  " });
+    expect(r).toMatchObject({ topicId, summary: "Passiv: be + Partizip.", length: 22 });
+    const l = await ok("list_exams", {});
+    expect(l.exams.find((e: { id: string }) => e.id === c.created.id).topics[0].summary).toBe("Passiv: be + Partizip.");
+    expect((await ok("set_topic_summary", { topicId, summary: "" })).summary).toBeNull();
+    expect(await fails("set_topic_summary", { topicId: "nope", summary: "x" })).toContain("gibt es nicht");
+    expect(await fails("set_topic_summary", { topicId, summary: "x".repeat(4001) })).toBeTruthy();
+  });
+
   it("add_exam und set_exam_topics", async () => {
     const c = await ok("add_exam", { subject: "e", title: "Unit 4", date: addDays(today, 10), startTime: "08:15", topics: ["Past tense", "Vocabulary"] });
     expect(c.created.subject).toBe("E");

@@ -1,5 +1,7 @@
 // Geld: Ausgaben, Buchungen, Konten, Depot, offene Rückzahlungen der Mutter.
-import { useMemo, useState } from "react";
+import { useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { Link } from "./router";
+import { merchantOf } from "../shared/tiefe";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import { addDays, dayCompact, daysBetween, monthLong } from "../shared/dates";
@@ -9,7 +11,7 @@ import type { Category, Transaction } from "../shared/schemas";
 import { useSheet } from "./sheet";
 import { notify } from "./toast";
 import { Icon, Money, nf } from "./ui";
-import { useAddInvest, useAllTransactions, useCategories, useInvest, useRemoveInvest, useSetSetting, useSettings, useToday, useUpdateTx } from "./queries";
+import { useAddInvest, useAllTransactions, useInvest, useRemoveInvest, useSetSetting, useSettings, useToday } from "./queries";
 
 const uid = () => crypto.randomUUID();
 const CAT: Record<string, { icon: string }> = {
@@ -35,7 +37,8 @@ export function CatIcon({ name }: { name?: string | null }) {
 export const monthTitle = (month: string) => monthLong(Number(month.slice(5, 7)));
 
 /** Kumulierte eigene Ausgaben über den Monat, ab heute gestrichelt hochgerechnet, mit Budgetlinie. */
-export function SpendChart({ txs, month, budget, today }: { txs: Transaction[]; month: string; budget: number; today: string }) {
+export function SpendChart({ txs, month, budget, today, dayHref }: { txs: Transaction[]; month: string; budget: number; today: string; dayHref?: (date: string) => string }) {
+  const [sel, setSel] = useState<number | null>(null);
   const y = Number(month.slice(0, 4)), m = Number(month.slice(5, 7));
   const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const isNow = today.startsWith(month);
@@ -53,14 +56,30 @@ export function SpendChart({ txs, month, budget, today }: { txs: Transaction[]; 
   const pts = Array.from({ length: upto }, (_, i) => [X(i + 1), Y(cum[i])] as const);
   const line = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join("");
   const area = pts.length ? `${line}L${pts.at(-1)![0].toFixed(1)} ${Hh}L${pts[0][0].toFixed(1)} ${Hh}Z` : "";
+  const pick = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!dayHref) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const d = Math.max(1, Math.min(upto, Math.round(((e.clientX - r.left) / r.width) * days)));
+    setSel(d);
+  };
+  const selDate = sel ? `${month}-${String(sel).padStart(2, "0")}` : null;
   return (
     <div>
+      <div className={dayHref ? "pick press" : undefined} onClick={pick} role={dayHref ? "button" : undefined} aria-label={dayHref ? "Tag im Verlauf wählen" : undefined}>
       <svg className="area" viewBox={`0 0 ${W} ${Hh}`} preserveAspectRatio="none" role="img" aria-label="Verlauf der Ausgaben im Monat">
         <line className="bl" x1="0" x2={W} y1={Y(budget)} y2={Y(budget)} />
         {area && <path className="fl" d={area} />}
         {line && <path className="ln" d={line} vectorEffect="non-scaling-stroke" />}
         {isNow && upto < days && pts.length > 0 && <path className="pj" d={`M${pts.at(-1)![0]} ${pts.at(-1)![1]}L${W} ${Y(proj)}`} vectorEffect="non-scaling-stroke" />}
       </svg>
+      {sel && <i className="cursor" style={{ left: `${(sel / days) * 100}%` }} />}
+      </div>
+      {selDate && dayHref && (
+        <Link href={dayHref(selDate)} className="daysel press" onClick={() => {}}>
+          <span><b>{dayCompact(selDate)}</b> · {nf(per[sel! - 1] ?? 0, 2)}</span>
+          <span className="faint">Buchungen <Icon n="chev" className="go" /></span>
+        </Link>
+      )}
       <div className="sub" style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--fg2)", paddingTop: 6 }}>
         <span>Budget {nf(budget)}</span>
         {isNow && upto < days && <span>erwartet {nf(proj)}</span>}
@@ -69,56 +88,18 @@ export function SpendChart({ txs, month, budget, today }: { txs: Transaction[]; 
   );
 }
 
-export function TxRow({ t, cats }: { t: Transaction; cats: Category[] }) {
+export function TxRow({ t, cats, base = [] }: { t: Transaction; cats: Category[]; base?: string[] }) {
   const sheet = useSheet();
   const c = cats.find((x) => x.id === t.categoryId);
   return (
-    <button type="button" className="lrow press" onClick={() => sheet.open(<TxSheet id={t.id} />)}>
+    <Link href={`/geld/${[...base, "buchung", t.id].join("/")}`} className="lrow press" onClick={() => sheet.close()}>
       <CatIcon name={t.isRepayment ? "Sonstiges" : c?.name} />
       <span className="w">
-        <b>{t.description || c?.name || (t.isRepayment ? "Rückzahlung" : "Buchung")}</b>
+        <b>{t.description ? merchantOf(t.description).name : c?.name || (t.isRepayment ? "Rückzahlung" : "Buchung")}</b>
         <span>{dayCompact(t.date)}{c ? ` · ${c.name}` : ""}{t.mealOut ? " · Mahlzeit" : ""}{t.isRepayment ? " · Rückzahlung" : ""}{t.internal ? " · eigene Überweisung" : ""}{t.currency !== "CHF" ? ` · ${t.currency}` : ""}</span>
       </span>
-      <span className="a"><Money v={t.amount} size={17} cur={false} signed /></span>
-    </button>
-  );
-}
-
-export function TxSheet({ id }: { id: string }) {
-  const tx = useAllTransactions().data ?? [];
-  const cats = useCategories().data ?? [];
-  const upd = useUpdateTx();
-  const t = tx.find((x) => x.id === id);
-  if (!t) return <div style={{ minHeight: 120 }} />;
-  const set = (patch: Record<string, unknown>, onSuccess?: () => void) => upd.mutate({ id, patch }, { onSuccess });
-  return (
-    <div>
-      <h3>{t.description || "Buchung"}</h3>
-      <div className="when"><Money v={t.amount} size={26} signed /> · {dayCompact(t.date)}</div>
-      <div className="field">
-        <label htmlFor="tx-c">Kategorie</label>
-        <select id="tx-c" className="inp" value={t.categoryId ?? ""} onChange={(e) => { set({ categoryId: e.target.value || null }, () => { if (e.target.value && t.description) notify("Gemerkt für ähnliche Buchungen"); }); }}>
-          <option value="">Keine</option>
-          {cats.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
-        </select>
-      </div>
-      {t.amount < 0 && (
-        <div className="field">
-          <span>Mahlzeit auswärts</span>
-          <button type="button" className="seg press" aria-pressed={t.mealOut} onClick={() => set({ mealOut: !t.mealOut })}>
-            <span style={{ padding: "0 14px", height: 40, display: "grid", placeItems: "center", borderRadius: 9, background: t.mealOut ? "var(--fg)" : "transparent", color: t.mealOut ? "#000" : "var(--fg3)", fontWeight: 600 }}>{t.mealOut ? "Ja" : "Nein"}</span>
-          </button>
-        </div>
-      )}
-      {t.amount > 0 && (
-        <div className="field">
-          <span>Rückzahlung von Mama</span>
-          <button type="button" className="seg press" aria-pressed={t.isRepayment} onClick={() => set({ isRepayment: !t.isRepayment })}>
-            <span style={{ padding: "0 14px", height: 40, display: "grid", placeItems: "center", borderRadius: 9, background: t.isRepayment ? "var(--fg)" : "transparent", color: t.isRepayment ? "#000" : "var(--fg3)", fontWeight: 600 }}>{t.isRepayment ? "Ja" : "Nein"}</span>
-          </button>
-        </div>
-      )}
-    </div>
+      <span className="a"><Money v={t.amount} size={17} cur={false} signed /><Icon n="chev" className="go" /></span>
+    </Link>
   );
 }
 
@@ -126,37 +107,6 @@ export function useMama() {
   const all = useAllTransactions().data ?? [];
   const bal = useMemo(() => mamaBalance(all), [all]);
   return { all, ...bal, any: all.some((t) => t.mealOut) };
-}
-
-export function MamaSheet() {
-  const m = useMama();
-  const upd = useUpdateTx();
-  const name = useSettings().mamaName;
-  const open = m.meals.filter((x) => x.status !== "settled").reverse();
-  const done = m.meals.filter((x) => x.status === "settled").reverse();
-  const Row = ({ x }: { x: (typeof m.meals)[number] }) => (
-    <div className="lrow" style={{ gridTemplateColumns: "minmax(0,1fr) auto auto" }}>
-      <span className="w">
-        <b>{x.tx.description || "Mahlzeit"}</b>
-        <span>{dayCompact(x.tx.date)}{x.status === "partial" ? ` · ${nf(x.covered, 2)} erhalten` : ""}</span>
-      </span>
-      <span className="a"><Money v={x.expected} size={17} cur={false} /></span>
-      <button type="button" className="chip btn press" onClick={() => upd.mutate({ id: x.tx.id, patch: { settled: !x.tx.settledAt } })}>
-        {x.tx.settledAt ? "Öffnen" : "Beglichen"}
-      </button>
-    </div>
-  );
-  return (
-    <div>
-      <h3>Offen von Mama</h3>
-      <div className="when">{name ? name : "Hälfte der Mahlzeiten auswärts"}</div>
-      <div style={{ marginBottom: 6 }}><Money v={m.open} size={38} /></div>
-      {m.meals.length === 0 && <div className="empty">Noch keine Mahlzeit auswärts.</div>}
-      {open.map((x) => (<Row key={x.tx.id} x={x} />))}
-      {done.length > 0 && <div className="sec">Beglichen</div>}
-      {done.map((x) => (<Row key={x.tx.id} x={x} />))}
-    </div>
-  );
 }
 
 /* ---------- Depot ---------- */

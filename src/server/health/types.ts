@@ -32,6 +32,18 @@ export interface DayValues {
   weightKg: number | null;
 }
 
+/** Eine Nacht mit Zeiten (UTC-ISO) und Minuten je Phase; Phasen null, wenn die Schnittstelle keine Stufen lieferte. */
+export interface SleepNight {
+  day: string;
+  startAt: string;
+  endAt: string;
+  asleepMin: number | null;
+  awakeMin: number | null;
+  deepMin: number | null;
+  lightMin: number | null;
+  remMin: number | null;
+}
+
 export interface Workout {
   id: string;
   day: string;
@@ -47,6 +59,7 @@ export interface Workout {
 export interface FetchResult {
   days: DayValues[];
   workouts: Workout[];
+  nights?: SleepNight[];
   /** Je Messgrösse, die nicht gelesen werden konnte, eine kurze Meldung (ohne Adresse und Token). */
   problems: string[];
 }

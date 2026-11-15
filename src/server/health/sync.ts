@@ -7,7 +7,7 @@ import { newId, nowIso, type Db } from "../util";
 import { decryptToken, encryptToken } from "./crypto";
 import { googleHealth } from "./google";
 import { withCredentials } from "./credentials";
-import { HealthError, type DayValues, type HealthEnv, type HealthProvider, type TokenSet, type Workout } from "./types";
+import { HealthError, type DayValues, type SleepNight, type HealthEnv, type HealthProvider, type TokenSet, type Workout } from "./types";
 
 export const PROVIDER = googleHealth;
 export const KIND = "fitbit";
@@ -22,7 +22,7 @@ export const FIRST_HOUR = 6;
 const SLACK_MS = 60_000;
 const BATCH = 40;
 
-const { healthConnection, healthDaily, healthWorkouts, syncRuns } = schema;
+const { healthConnection, healthDaily, healthSleep, healthWorkouts, syncRuns } = schema;
 
 export interface HealthSyncDeps {
   fetcher?: typeof fetch;
@@ -81,7 +81,7 @@ async function freshAccess(db: Db, env: HealthEnv, provider: HealthProvider, f: 
   return refreshed.accessToken;
 }
 
-async function write(db: Db, days: DayValues[], workouts: Workout[]): Promise<void> {
+async function write(db: Db, days: DayValues[], workouts: Workout[], nights: SleepNight[] = []): Promise<void> {
   const stmts: unknown[] = [];
   for (const d of days) {
     if (d.sleepMin === null && d.steps === null && d.restingHr === null && d.weightKg === null) continue;
@@ -102,6 +102,9 @@ async function write(db: Db, days: DayValues[], workouts: Workout[]): Promise<vo
           },
         }),
     );
+  }
+  for (const n of nights) {
+    stmts.push(db.insert(healthSleep).values(n).onConflictDoUpdate({ target: healthSleep.day, set: { ...n, updatedAt: nowIso() } }));
   }
   for (const w of workouts) {
     const v = { ...w, source: "fitbit" };
@@ -162,7 +165,7 @@ export async function syncHealth(rawEnv: HealthEnv, deps: HealthSyncDeps = {}): 
       token = await freshAccess(db, env, provider, f, now, true);
       res = await provider.fetchRange(env, token, from, to, f);
     }
-    await write(db, res.days, res.workouts);
+    await write(db, res.days, res.workouts, res.nights);
     const ok = res.problems.length === 0;
     const written = res.days.length;
     const base = `${written} ${written === 1 ? "Tag" : "Tage"}, ${res.workouts.length} ${res.workouts.length === 1 ? "Training" : "Trainings"}`;
