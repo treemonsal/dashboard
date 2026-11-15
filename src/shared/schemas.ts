@@ -282,7 +282,7 @@ export const columnMapping = z.object({
 /** Vom Browser aus einem PDF gelesene Buchungen (das PDF selbst verlässt das Gerät nie). Hash und Konto setzt der Server selbst. */
 export const pdfRows = z.object({
   bank: z.enum(["revolut", "zkb", "yuh", "unbekannt"]),
-  account: z.string().max(40).optional(),
+  account: z.string().max(100).optional(),
   /** Zahl unsicherer Zeilen aus dem Parser; grösser als 0 braucht `confirmed` */
   uncertain: z.number().int().min(0).max(100_000).default(0),
   confirmed: z.boolean().default(false),
@@ -290,7 +290,7 @@ export const pdfRows = z.object({
     .array(
       z.object({
         date: isoDate,
-        description: z.string().max(400),
+        description: z.string().max(1000),
         amount: z.number().int().min(-1e12).max(1e12),
         currency: z.string().regex(/^[A-Z]{3}$/),
         amountChf: z.number().int().min(-1e12).max(1e12),
@@ -302,7 +302,7 @@ export const pdfRows = z.object({
 });
 export const importRequest = z.object({
   files: z
-    .array(z.object({ name: z.string().max(200), text: z.string().max(20_000_000).default(""), mapping: columnMapping.optional(), pdf: pdfRows.optional() }))
+    .array(z.object({ name: z.string().max(500), text: z.string().max(20_000_000).default(""), mapping: columnMapping.optional(), pdf: pdfRows.optional() }))
     .min(1)
     .max(12),
 });

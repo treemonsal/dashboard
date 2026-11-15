@@ -36,10 +36,14 @@ export function parseAmount(input: string): number | null {
   if (lastDot >= 0 && lastComma >= 0) dec = lastDot > lastComma ? "." : ",";
   else if (lastDot >= 0) {
     if (s.split(".").length === 2) dec = ".";
-  } else if (lastComma >= 0 && s.split(",").length === 2) {
-    const after = s.length - lastComma - 1;
-    const thousands = after === 3 && lastComma > 0 && lastComma <= 3 && !hasApos;
-    if (!thousands) dec = ",";
+    // Mehrere Punkte nur als saubere Tausendergruppen (1.234.567), sonst unlesbar.
+    else if (!/^\d{1,3}(\.\d{3})+$/.test(s)) return null;
+  } else if (lastComma >= 0) {
+    if (s.split(",").length === 2) {
+      const after = s.length - lastComma - 1;
+      const thousands = after === 3 && lastComma > 0 && lastComma <= 3 && !hasApos;
+      if (!thousands) dec = ",";
+    } else if (!/^\d{1,3}(,\d{3})+$/.test(s)) return null;
   }
   let intPart = s;
   let frac = "";

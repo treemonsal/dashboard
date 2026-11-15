@@ -33,7 +33,7 @@ export interface ParseOptions {
   account?: string;
   /** CHF pro 1 Einheit Fremdwährung, z.B. { EUR: 0.95 } */
   rates?: Record<string, number>;
-  /** Nur für parseWithMapping: Dateiname als Hinweis für die Bank-Erkennung */
+  /** Dateiname als Hinweis für die Bank-Erkennung (parseWithMapping, parsePdf) */
   fileName?: string;
 }
 

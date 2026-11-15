@@ -29,7 +29,7 @@ export async function readPdfFile(file: File): Promise<ImportFileIn> {
     }
     if (!items.length) throw new Error("PDF ohne Text");
     const lines = groupLines(items);
-    const res = parsePdf(lines);
+    const res = parsePdf(lines, { fileName: file.name });
     return {
       name: file.name,
       text: "",

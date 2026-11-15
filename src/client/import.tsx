@@ -202,7 +202,16 @@ export function ImportSheet({ initial }: { initial: ImportFileIn[] }) {
     <div>
       <h3>Export</h3>
       <div className="when">{files.length === 1 ? files[0]!.name : `${files.length} Dateien`}</div>
-      {err && <div className="bad" style={{ marginBottom: 10 }}>{err}</div>}
+      {err && (
+        <div style={{ marginBottom: 10 }}>
+          <div className="bad">{err}</div>
+          {/* Ohne Vorschau (z.B. Server verlangt Bestätigung): PDF-Hinweise und Bestätigung trotzdem zeigen */}
+          {!pre &&
+            files.map((f, i) =>
+              f.pdf ? <PdfNotes key={i} file={f} onConfirm={(c) => setFiles(files.map((g, k) => (k === i && g.pdf ? { ...g, pdf: { ...g.pdf, confirmed: c } } : g)))} /> : null,
+            )}
+        </div>
+      )}
       {pre && (
         <>
           <div className="yh"><b>{pre.fresh}</b><span>neu · {pre.duplicates} schon vorhanden</span></div>
