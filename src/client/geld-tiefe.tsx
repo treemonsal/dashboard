@@ -20,6 +20,7 @@ import { CatIcon, DepotSheet, SpendChart, TxRow, pctText, useDepot } from "./gel
 import { useSheet } from "./sheet";
 import { useAccounts, useAllTransactions, useCategories, useSettings, useToday, useUpdateTx } from "./queries";
 import { api } from "./api";
+import { KontoStand, ProvisionalTools, isProvisional } from "./laufend";
 
 const href = (...s: string[]) => `/geld${s.length ? "/" + s.join("/") : ""}`;
 const day = (d: string) => dayCompact(d);
@@ -223,6 +224,7 @@ function Konto({ d, id, today }: { d: D; id: string; today: string }) {
   return (
     <Stage title={a.name} back="/geld" crumbs={[{ label: a.name }]}>
       <div className="center"><Money v={a.balance} size={44} /><span className="lbl">{txs.length} Buchungen</span></div>
+      <KontoStand a={a} txs={d.txs} />
       {txs.length === 0 && <div className="card"><div className="empty">Keine Buchungen auf diesem Konto.</div></div>}
       {months.map((m) => (
         <div key={m} className="card">
@@ -327,6 +329,7 @@ function Buchung({ d, segs, today }: { d: D; segs: string[]; today: string }) {
           </Link>
         )}
       </div>
+      {isProvisional(t) && <ProvisionalTools t={t} accs={d.accs} onGone={() => navigate(parent, { replace: true })} />}
       {t.description && <div className="card"><h2>Originaltext</h2><p className="orig">{t.description}</p></div>}
     </Stage>
   );

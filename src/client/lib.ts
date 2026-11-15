@@ -1,4 +1,5 @@
 import { todayInZone, daysUntil, minutesOf } from "../shared/dates";
+import { useUnrecorded } from "./laufend";
 import type { Task, Grade, Subject } from "../shared/schemas";
 import { countingAverage, weightedAverage } from "../shared/calc";
 
@@ -42,7 +43,9 @@ export function useMonthMoney() {
   const s = useSettings();
   const settings = useSettingsQuery();
   const budget = budgetOf(s.salary, s.investMonthly);
-  return { month, txs: q.data ?? [], loaded: q.isSuccess && settings.isSuccess, loading: q.isPending || settings.isPending, error: q.error ?? settings.error, budget, summary: monthSummary(q.data ?? [], budget) };
+  const unrecorded = useUnrecorded(month).total;
+  const base = monthSummary(q.data ?? [], budget);
+  return { month, txs: q.data ?? [], loaded: q.isSuccess && settings.isSuccess, loading: q.isPending || settings.isPending, error: q.error ?? settings.error, budget, unrecorded, summary: { ...base, left: Math.round((base.left - unrecorded) * 100) / 100 } };
 }
 
 export function useLatest(metric: "sleepMin" | "steps" | "restingHr" | "weightKg") {

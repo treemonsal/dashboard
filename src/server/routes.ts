@@ -34,6 +34,7 @@ import { planStudyBlocks } from "../shared/lernplan";
 import { todayInZone, weekdayNum } from "../shared/dates";
 import { commitImport, learnFromCorrection, previewImport, recompute, unconfirmedPdf } from "./bankimport";
 import { registerCalendar } from "./calendar";
+import { registerLaufend } from "./laufend";
 import { registerPush } from "./push";
 import { registerTimetable } from "./timetable";
 import { registerHealth } from "./health/routes";
@@ -84,6 +85,7 @@ function writePlan(planId: string, b: z.infer<typeof gymPlanWrite>, sortOrder?: 
 const toTx = (r: typeof t.transactions.$inferSelect) => ({
   id: r.id, accountId: r.accountId, categoryId: r.categoryId, date: r.date, amount: r.amount, description: r.description,
   mealOut: r.mealOut, isRepayment: r.isRepayment, repaymentOverride: r.repaymentOverride, settledAt: r.settledAt, internal: r.internal, currency: r.currency, bookedAt: r.bookedAt,
+  state: r.state, origin: r.origin, createdAt: r.createdAt,
 });
 
 /** Kategorie "Essen auswärts" setzt "Mahlzeit auswärts" standardmässig, alles andere (auch Snack) nicht. */
@@ -100,6 +102,7 @@ export function registerExtra(api: Hono<AppEnv>) {
   registerTimetable(api);
   registerHealth(api);
   registerTiefe(api);
+  registerLaufend(api);
 
   /* ---------- Einstellungen ---------- */
   api.get("/settings", async (c) => {
@@ -310,6 +313,14 @@ export function registerExtra(api: Hono<AppEnv>) {
         openingBalance: t.accounts.openingBalance,
         sortOrder: t.accounts.sortOrder,
         balance: sql<number>`${t.accounts.openingBalance} + coalesce((select sum(amount) from transactions x where x.account_id = accounts.id), 0)`.mapWith(Number),
+        coveredThrough: sql<string | null>`(select max(date) from transactions x where x.account_id = accounts.id and x.state = 'confirmed' and x.hash is not null)`,
+        anchorBalance: t.accounts.anchorBalance,
+        anchorDay: t.accounts.anchorDay,
+        anchorAt: t.accounts.anchorAt,
+        anchorKind: t.accounts.anchorKind,
+        enteredBalance: t.accounts.enteredBalance,
+        enteredDay: t.accounts.enteredDay,
+        enteredAt: t.accounts.enteredAt,
       })
       .from(t.accounts)
       .orderBy(asc(t.accounts.sortOrder), asc(t.accounts.name));
@@ -363,13 +374,18 @@ export function registerExtra(api: Hono<AppEnv>) {
     if (!row) return notFound(c);
     // Kategorie korrigiert: Regel lernen (gilt ab dem nächsten Import und für gleichartige "Sonstiges"-Buchungen)
     if (rest.categoryId && rest.categoryId !== before?.categoryId) await learnFromCorrection(c.var.db, txId, rest.categoryId);
-    else if (rest.mealOut !== undefined || rest.isRepayment !== undefined || rest.repaymentOverride !== undefined) await recompute(c.var.db);
+    else if (rest.mealOut !== undefined || rest.isRepayment !== undefined || rest.repaymentOverride !== undefined || rest.amount !== undefined) await recompute(c.var.db);
     const fresh = await c.var.db.select().from(t.transactions).where(eq(t.transactions.id, txId)).get();
     return c.json(toTx(fresh ?? row));
   });
   api.delete("/transactions/:id", v("param", idParam), async (c) => {
-    const row = await c.var.db.delete(t.transactions).where(eq(t.transactions.id, c.req.valid("param").id)).returning({ id: t.transactions.id }).get();
-    return row ? c.json({ ok: true }) : notFound(c);
+    // Nur vorläufige Buchungen lassen sich löschen; bestätigte (aus einem Auszug) bleiben.
+    const txId = c.req.valid("param").id;
+    const cur = await c.var.db.select({ state: t.transactions.state }).from(t.transactions).where(eq(t.transactions.id, txId)).get();
+    if (!cur) return notFound(c);
+    if (cur.state !== "provisional") return c.json({ error: "Bestätigte Buchungen lassen sich nicht löschen" }, 409);
+    await c.var.db.delete(t.transactions).where(and(eq(t.transactions.id, txId), eq(t.transactions.state, "provisional")));
+    return c.json({ ok: true });
   });
 
   /* ---------- Depot (S&P 500): Werte und Einzahlungen von Hand ---------- */

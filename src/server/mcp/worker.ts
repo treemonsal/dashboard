@@ -6,6 +6,7 @@ import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import type { JWTVerifyGetKey } from "jose";
 import { createApp } from "../app";
 import { handleAdmin } from "./admin";
+import { INTAKE_PATH, handleIntake } from "../eingang";
 import { handleAuthorize } from "./consent";
 import { json, withHeaders, type McpEnv } from "./env";
 import { mcpApiHandler } from "./handler";
@@ -61,6 +62,8 @@ export function createWorker(opts: WorkerOptions = {}) {
     async fetch(req: Request, env: McpEnv, ctx: ExecutionContext): Promise<Response> {
       const path = new URL(req.url).pathname;
       const oauth = env.OAUTH_PROVIDER!;
+      // Eingang per Kurzbefehl: bewusst ohne Access-Prüfung, schützt sich selbst mit einem eigenen Schlüssel (src/server/eingang.ts).
+      if (path === INTAKE_PATH) return handleIntake(req, env);
       if (path === AUTHORIZE_PATH) return handleAuthorize(req, env, oauth, opts.accessKey);
       if (path === "/api/connector" || path.startsWith("/api/connector/")) return handleAdmin(req, env, oauth, opts.accessKey);
       // Übrige Discovery-Pfade (z.B. openid-configuration): ohne Access-Prüfung, aber leer.

@@ -17,6 +17,7 @@ import { useMonthMoney, useLatest } from "./lib";
 import { useAccounts, useAllTransactions, useCategories, useExams, useGymPlans, useNow, useSetSetting, useSettings, useSettingsQuery, useTasks, useToday, useTransactions } from "./queries";
 import { notify } from "./toast";
 import { UploadAction } from "./import";
+import { IntakeCard, QuickAddAction, UnrecordedRows } from "./laufend";
 
 const dayList = (s: string) => (s ? s.split(",").map(Number) : []);
 
@@ -43,7 +44,7 @@ export function Geld() {
       <PageTitle>Geld</PageTitle>
       <div className="center">
         <div className="lbl">Übrig</div>
-        {hasAny && q.isSuccess && m.loaded ? <Link href={`/geld/analyse/${month}`} className="press" aria-label="Analyse öffnen"><Money v={m.budget - spent} size={52} /></Link> : <span className="bigv faint" style={{ fontSize: 52 }}>–</span>}
+        {hasAny && q.isSuccess && m.loaded ? <Link href={`/geld/analyse/${month}`} className="press" aria-label="Analyse öffnen"><Money v={m.budget - spent - (month === today.slice(0, 7) ? m.unrecorded : 0)} size={52} /></Link> : <span className="bigv faint" style={{ fontSize: 52 }}>–</span>}
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <button type="button" className="iconbtn press" aria-label="Voriger Monat" onClick={() => shift(-1)}><Icon n="back" /></button>
           <span className="chip">{month === today.slice(0, 7) ? "Diesen Monat" : `${monthTitle(month)} ${month.slice(0, 4)}`}</span>
@@ -52,6 +53,7 @@ export function Geld() {
       </div>
       <div className="acts">
         <UploadAction />
+        <QuickAddAction />
         <RoundAction icon="chart" label="Analyse" href={`/geld/analyse/${month}`} />
         <RoundAction icon="coin" label="Portfolio" href="/geld/depot" />
         <RoundAction icon="fork" label="Offen von Mama" href="/geld/mama" />
@@ -68,6 +70,8 @@ export function Geld() {
           <div className="empty">Noch kein Export hochgeladen.</div>
         )}
       </div>
+
+      <UnrecordedRows month={month} />
 
       {mama.any && (
         <Link href="/geld/mama" className="card tap press">
@@ -349,6 +353,7 @@ export function Einstellungen() {
       <KalenderEinstellungen />
       <ErinnerungenEinstellungen />
       <FitbitEinstellungen />
+      <IntakeCard />
       <VerbundeneApps />
       <AbgleichLaeufe />
       <div className="card" style={{ paddingTop: 0 }}>

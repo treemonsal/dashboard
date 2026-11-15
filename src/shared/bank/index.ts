@@ -8,3 +8,5 @@ export { markInternalTransfers } from "./transfers";
 export { mealShares, isMeal, type MealSettings, type MealEntry, type MealResult } from "./meals";
 export { monthSummary, type MonthSummary, type CategoryTotal, type SummaryOptions } from "./summary";
 export { parsePdf, groupLines, pdfText, matchDate, findHeader, rowsToResult, type PdfItem, type PdfLine, type PdfCell, type PdfParse, type PdfStats } from "./pdf";
+export { reconcile, nameSimilarity, type Vorlaeufig, type Auszugszeile, type Treffer, type Abgleich, type AbgleichOptions } from "./reconcile";
+export { parseBetrag, cleanMerchant, dedupeKey, type Betrag } from "./eingang";

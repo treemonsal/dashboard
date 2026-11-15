@@ -168,6 +168,7 @@ export const settingsUpdate = z
     hideHomework: z.enum(["0", "1"]),
     schoolHolidayUntil: z.union([isoDate, z.literal("")]),
     workoutView: z.enum(["sport", "alle"]),
+    eingangKonto: z.string().trim().min(1).max(80),
   })
   .partial()
   .strict();
@@ -248,6 +249,15 @@ export const transactionCreate = z.object({
   mealOut: z.boolean().optional(),
   isRepayment: z.boolean().optional(),
 });
+/** Vorläufige Buchung von Hand: nur Ausgaben, Betrag positiv. */
+export const provisionalCreate = z.object({
+  accountId: id,
+  categoryId: id.nullable().optional(),
+  date: isoDate,
+  amount: z.number().positive().max(100000),
+  merchant: z.string().trim().min(1).max(120),
+});
+export const balanceEntry = z.object({ balance: z.number().min(-1e9).max(1e9) });
 export const transactionBulk = z.object({ transactions: z.array(transactionCreate).min(1).max(1000) });
 export const transactionUpdate = transactionCreate.omit({ id: true }).partial().extend({ settled: z.boolean().optional(), repaymentOverride: z.boolean().nullable().optional() });
 export const transactionQuery = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/).optional(), limit: z.coerce.number().int().min(1).max(1000).default(200) });
@@ -327,6 +337,8 @@ export interface ImportPreview {
 }
 export interface ImportResult extends ImportPreview {
   inserted: number;
+  /** Vorläufige Buchungen, die einer Auszugszeile zugeordnet wurden und dadurch verschwunden sind */
+  matched?: number;
 }
 
 /* ---------- Körper ---------- */
@@ -542,6 +554,15 @@ export interface Account {
   openingBalance: number;
   balance: number;
   sortOrder: number;
+  /** Jüngster Tag, den importierte Auszüge für dieses Konto abdecken */
+  coveredThrough?: string | null;
+  anchorBalance?: number | null;
+  anchorDay?: string | null;
+  anchorAt?: string | null;
+  anchorKind?: "auszug" | "eingabe" | null;
+  enteredBalance?: number | null;
+  enteredDay?: string | null;
+  enteredAt?: string | null;
 }
 export interface Category {
   id: string;
@@ -563,6 +584,10 @@ export interface Transaction {
   currency: string;
   /** Verbuchungszeit laut Bank, falls vorhanden */
   bookedAt?: string | null;
+  /** bestätigt (aus Auszug) oder vorläufig */
+  state?: "confirmed" | "provisional";
+  origin?: "auszug" | "kurzbefehl" | "hand";
+  createdAt?: string;
 }
 
 export interface HealthDay {

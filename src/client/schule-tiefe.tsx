@@ -165,7 +165,7 @@ function Note({ row, gradeId }: { row: ReturnType<typeof subjectAverages>[number
       <div className="card" style={{ paddingTop: 0 }}>
         <div className="kv"><span>Gewicht</span><span>{nf(g.weight, 1)}</span></div>
         <div className="kv"><span>Datum</span><span>{dayCompact(g.date)}</span></div>
-        {g.source && <div className="kv"><span>Quelle</span><span>{g.source}</span></div>}
+        {g.source && <div className="kv"><span>Quelle</span><span>{g.source === "connector" || g.source === "sonntagslauf" || g.source === "kvz" ? "Schulportal" : g.source === "manual" ? "Von Hand" : g.source}</span></div>}
       </div>
       {imp && (
         <div className="card" style={{ paddingTop: 0 }}>

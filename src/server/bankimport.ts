@@ -1,10 +1,10 @@
 // Bank-Import: Datei lesen, Doppelte ausfiltern, kategorisieren, speichern, danach Paare und Rückzahlungen neu bestimmen.
 // Die Rohdatei wird nicht gespeichert, nur die einzelnen Buchungen.
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import * as schema from "./db/schema";
 import {
   CAT, DEFAULT_RULES, applyCategories, dedupe, isMeal, learnRule, markInternalTransfers, mealShares, parseExport, parseWithMapping,
-  rowsToResult, type Bank, type Buchung, type ParseResult, type Rule,
+  reconcile, rowsToResult, type Bank, type Buchung, type ParseResult, type Rule,
 } from "../shared/bank";
 import type { ImportFilePreview, ImportPreview, ImportResult } from "../shared/schemas";
 import { batch, newId, nowIso, type Db } from "./util";
@@ -22,7 +22,7 @@ type FileIn = { name: string; text?: string; mapping?: Record<string, unknown>; 
 /** Unsichere PDF-Dateien speichert nur, wer sie bestätigt hat. */
 export const unconfirmedPdf = (files: FileIn[]) => files.some((f) => f.pdf && (f.pdf.uncertain ?? 0) > 0 && !f.pdf.confirmed);
 
-async function loadRules(db: Db): Promise<Rule[]> {
+export async function loadRules(db: Db): Promise<Rule[]> {
   const rows = await db.select().from(t.categoryRules);
   // Neueste Korrektur zuerst, dann die Standardregeln
   const mine = rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((r): Rule => ({ pattern: r.pattern, category: r.category, ...(r.wholeWord ? { wholeWord: true } : {}) }));
@@ -99,31 +99,61 @@ async function categoryIds(db: Db, names: string[]): Promise<Map<string, string>
   return map;
 }
 
+/** Saldo der jüngsten Auszugszeile (CHF) als Ankersaldo des Kontos. Ein jüngerer oder gleich alter Anker wird nicht überschrieben. */
+async function updateAnchor(db: Db, accountId: string, rows: Buchung[]): Promise<void> {
+  let last: Buchung | undefined;
+  for (const r of rows) if (r.balance !== undefined && r.currency === "CHF" && (!last || r.date >= last.date)) last = r;
+  if (!last) return;
+  const acc = await db.select().from(t.accounts).where(eq(t.accounts.id, accountId)).get();
+  if (acc?.anchorDay && acc.anchorDay > last.date) return;
+  await db.update(t.accounts).set({ anchorBalance: last.balance! / 100, anchorDay: last.date, anchorAt: null, anchorKind: "auszug", updatedAt: nowIso() }).where(eq(t.accounts.id, accountId));
+}
+
 export async function commitImport(db: Db, files: FileIn[]): Promise<ImportResult> {
   const prepared = await prepare(db, files);
   let inserted = 0;
+  let matched = 0;
   for (const p of prepared) {
-    if (p.res.needsConfirmation || !p.fresh.length) continue;
+    if (p.res.needsConfirmation) continue;
     const accountId = await accountFor(db, p.res.bank, p.res.account);
+    await updateAnchor(db, accountId, p.res.rows);
+    if (!p.fresh.length) continue;
     const cats = await categoryIds(db, p.fresh.map((r) => r.category ?? CAT.other));
-    const rows = p.fresh.map((r) => ({
-      id: newId(),
-      accountId,
-      categoryId: cats.get(r.category ?? CAT.other) ?? null,
-      date: r.date,
-      amount: r.amountChf / 100,
-      description: r.description,
-      hash: r.hash,
-      bookedAt: r.bookedAt ?? null,
-      currency: r.currency,
-      mealOverride: r.isMeal ?? null,
-    }));
-    for (let i = 0; i < rows.length; i += 4) await db.insert(t.transactions).values(rows.slice(i, i + 4));
+    // Vorläufige Buchungen desselben Kontos mit Auszugszeilen abgleichen: die Zeile gewinnt, übernimmt Kategorie und Mahlzeit-Wahl.
+    const prov = await db.select().from(t.transactions).where(and(eq(t.transactions.accountId, accountId), eq(t.transactions.state, "provisional")));
+    const rec = reconcile(
+      prov.map((x) => ({ id: x.id, account: accountId, date: x.date, amount: Math.round(x.amount * 100), currency: x.currency, description: x.description ?? "" })),
+      p.fresh.map((r) => ({ date: r.date, description: r.description, amount: r.amount, currency: r.currency, amountChf: r.amountChf })),
+      { account: accountId },
+    );
+    const byRow = new Map(rec.matches.map((m) => [m.rowIndex, prov.find((x) => x.id === m.provisionalId)!]));
+    const rows = p.fresh.map((r, i) => {
+      const old = byRow.get(i);
+      return {
+        id: newId(),
+        accountId,
+        categoryId: old?.categoryId ?? cats.get(r.category ?? CAT.other) ?? null,
+        date: r.date,
+        amount: r.amountChf / 100,
+        description: r.description,
+        hash: r.hash,
+        bookedAt: r.bookedAt ?? null,
+        currency: r.currency,
+        mealOverride: old?.mealOverride ?? r.isMeal ?? null,
+      };
+    });
+    for (let i = 0; i < rows.length; i += 4) {
+      const chunk = rows.slice(i, i + 4);
+      const gone = chunk.flatMap((_, j) => byRow.get(i + j) ?? []).map((x) => x.id);
+      // Einfügen und Entfernen der zugeordneten vorläufigen Buchung zusammen: nie beides oder keines von beiden sichtbar
+      await batch(db, [db.insert(t.transactions).values(chunk), ...(gone.length ? [db.delete(t.transactions).where(and(inArray(t.transactions.id, gone), eq(t.transactions.state, "provisional")))] : [])]);
+      matched += gone.length;
+    }
     inserted += rows.length;
   }
   await recompute(db);
   const ps = prepared.map(preview);
-  return { files: ps, fresh: ps.reduce((a, x) => a + x.fresh, 0), duplicates: ps.reduce((a, x) => a + x.duplicates, 0), inserted };
+  return { files: ps, fresh: ps.reduce((a, x) => a + x.fresh, 0), duplicates: ps.reduce((a, x) => a + x.duplicates, 0), inserted, matched };
 }
 
 /**
@@ -143,11 +173,15 @@ export async function recompute(db: Db): Promise<void> {
       ...(x.mealOverride !== null ? { isMeal: x.mealOverride } : {}),
     };
   });
-  const marked = markInternalTransfers(rows);
+  // Eigene Überweisungen nur unter bestätigten Buchungen suchen: eine vorläufige soll nie eine Auszugszeile zum Paar machen.
+  const confirmedIdx = txs.map((_x, i) => i).filter((i) => txs[i]!.state !== "provisional");
+  const pairs = markInternalTransfers(confirmedIdx.map((i) => rows[i]!));
+  const marked = rows.map((r) => ({ ...r }));
+  confirmedIdx.forEach((i, k) => { marked[i] = pairs[k]!; });
   const meals = mealShares(marked, { payerName: payerName || undefined });
   const stmts: unknown[] = [];
   txs.forEach((x, i) => {
-    if (!x.hash) return; // von Hand angelegte Buchungen nicht anfassen
+    if (!x.hash && x.state !== "provisional") return; // von Hand angelegte bestätigte Buchungen nicht anfassen
     const r = marked[i]!;
     const internal = !!r.internal || r.category === CAT.invest;
     const mealOut = isMeal({ ...r, internal }) ;

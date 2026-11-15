@@ -29,6 +29,14 @@ export interface ConnectorGrant {
   expiresAt: string | null;
 }
 
+export interface IntakeStatus { active: boolean; createdAt: string | null; lastAt: string | null; locked: boolean }
+export const intake = {
+  status: () => request<IntakeStatus>("GET", "/eingang"),
+  newKey: () => request<{ key: string }>("POST", "/eingang/schluessel", {}),
+  revoke: () => request<{ ok: true }>("DELETE", "/eingang/schluessel"),
+  test: () => request<{ ok: boolean; account?: string; reason?: string }>("POST", "/eingang/test", {}),
+};
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -113,6 +121,10 @@ export const api = {
     categories: () => get<S.Category[]>("/categories"),
     transactions: (month?: string) => get<S.Transaction[]>(`/transactions?limit=1000${month ? `&month=${month}` : ""}`),
     updateTx: (id: string, b: Record<string, unknown>) => patch<S.Transaction>(`/transactions/${id}`, b),
+    addProvisional: (b: { accountId: string; categoryId?: string | null; date: string; amount: number; merchant: string }) => post<{ id: string }>("/provisional", b),
+    removeTx: (id: string) => del(`/transactions/${id}`),
+    setBalance: (id: string, balance: number) => put<unknown>(`/accounts/${id}/balance`, { balance }),
+    bookUnrecorded: (id: string) => post<{ id: string }>(`/accounts/${id}/unrecorded`, {}),
     invest: () => get<S.InvestmentEntry[]>("/invest"),
     addInvest: (b: S.InvestmentEntryCreate) => post<S.InvestmentEntry>("/invest", b),
     removeInvest: (id: string) => del(`/invest/${id}`),

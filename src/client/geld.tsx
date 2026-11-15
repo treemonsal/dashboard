@@ -9,6 +9,7 @@ import { byCategory, mamaBalance, ownShare } from "../shared/geld";
 import { CONFIRMED_HOLDINGS, depotHoldings, PORTFOLIO_PRODUCTS, portfolioProduct, depotRules, depotState, toDepotEntry } from "../shared/depot";
 import type { Category, Transaction } from "../shared/schemas";
 import { useSheet } from "./sheet";
+import { ProvDot, isProvisional } from "./laufend";
 import { notify } from "./toast";
 import { Icon, Money, nf } from "./ui";
 import { useAddInvest, useAllTransactions, useInvest, useRemoveInvest, useSetSetting, useSettings, useToday } from "./queries";
@@ -95,7 +96,7 @@ export function TxRow({ t, cats, base = [] }: { t: Transaction; cats: Category[]
     <Link href={`/geld/${[...base, "buchung", t.id].join("/")}`} className="lrow press" onClick={() => sheet.close()}>
       <CatIcon name={t.isRepayment ? "Sonstiges" : c?.name} />
       <span className="w">
-        <b>{t.description ? merchantOf(t.description).name : c?.name || (t.isRepayment ? "Rückzahlung" : "Buchung")}</b>
+        <b>{t.description ? merchantOf(t.description).name : c?.name || (t.isRepayment ? "Rückzahlung" : "Buchung")}{isProvisional(t) && <ProvDot />}</b>
         <span>{dayCompact(t.date)}{c ? ` · ${c.name}` : ""}{t.mealOut ? " · Mahlzeit" : ""}{t.isRepayment ? " · Rückzahlung" : ""}{t.internal ? " · eigene Überweisung" : ""}{t.currency !== "CHF" ? ` · ${t.currency}` : ""}</span>
       </span>
       <span className="a"><Money v={t.amount} size={17} cur={false} signed /><Icon n="chev" className="go" /></span>

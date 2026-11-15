@@ -12,8 +12,10 @@ Stand 14.11.2026. Diese Datei zuerst lesen, bevor etwas geplant oder gefragt wir
 - Geboren am 10. Mai 2011.
 
 ## Gym
-- Montag und Mittwoch Oberkörper, Freitag Unterkörper.
-- Sonntag Unterkörper, klappt bisher etwa jede zweite Woche. Ziel: jede Woche, also 4 Trainings pro Woche.
+- Montag und Freitag Oberkörper, Mittwoch und Samstag Unterkörper. Ziel: 4 Trainings pro Woche.
+- Oberkörper: Latzug 3x12 30 kg, Brustpresse 3x12 20 kg, Rudern am Kabelzug 3x12 20 kg, Schulterpresse 3x10 10 kg, Bizeps Curls 2x12 5 kg, Trizeps Pushdown Seil 2x12 10 kg.
+- Unterkörper: Beinpresse 1x12 20 kg (Aufwärmen) und 3x12 40 kg, Leg Extensions 3x12 20 kg, Beinbeugen liegend 3x12 20 kg, Wadenheben 3x15 20 kg, Plank 3x30 s.
+- Bezahlt wird fast alles mit Apple Pay (alle Karten in Wallet). Twint nur für Rückzahlungen von Mama.
 
 ## Geld
 - Lohn 650 Franken pro Monat.

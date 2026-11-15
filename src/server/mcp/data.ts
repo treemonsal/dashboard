@@ -4,7 +4,8 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, like, lte, or, sql
 import * as t from "../db/schema";
 import { SETTING_DEFAULTS, type Settings } from "../../shared/settings";
 import { MIN_SUBJECT, TARGET_AVERAGE, neededGrade, overallAverage, subjectMarks, weightedAverage, type Needed } from "../../shared/calc";
-import { budgetOf, byCategory, mamaBalance, monthSummary } from "../../shared/geld";
+import { budgetOf, byCategory, mamaBalance, monthSummary, ownShare } from "../../shared/geld";
+import { accountSaldo } from "../laufend";
 import { depotRules, depotState, toDepotEntry } from "../../shared/depot";
 import { addDays, daysUntil, mondayOf, timeInZone, todayInZone, weekdayLong, weekdayNum, zoneMidnightUtc } from "../../shared/dates";
 import { newId, nowIso, type Db } from "../util";
@@ -409,11 +410,21 @@ export async function moneySummary(db: Db, month?: string) {
     settledAt: t.transactions.settledAt,
     categoryId: t.transactions.categoryId,
     internal: t.transactions.internal,
+    state: t.transactions.state,
   };
   const monthTx = await db.select(cols).from(t.transactions).where(like(t.transactions.date, `${m}-%`));
   const allTx = await db.select(cols).from(t.transactions);
   const cats = new Map((await db.select({ id: t.categories.id, name: t.categories.name }).from(t.categories)).map((c) => [c.id, c.name]));
   const summary = monthSummary(monthTx, budget);
+  // Vorläufige Buchungen zählen schon mit; hier nur ihr Anteil. Nicht erfasst: Differenz zum eingetippten Kontostand (im Monat der Eingabe).
+  const prov = monthTx.filter((x) => x.state === "provisional");
+  const provSpent = r2(prov.reduce((a, x) => a + ownShare(x), 0));
+  let unrecorded = 0;
+  for (const a of await db.select({ id: t.accounts.id }).from(t.accounts)) {
+    const sd = await accountSaldo(db, a.id);
+    if (sd && sd.result.unrecorded > 0 && sd.result.day?.startsWith(m)) unrecorded += sd.result.unrecorded;
+  }
+  unrecorded = r2(unrecorded);
   const mama = mamaBalance(allTx);
   const entries = await db.select().from(t.investmentEntries).orderBy(asc(t.investmentEntries.date), asc(t.investmentEntries.createdAt));
   const depot = depotState(entries.map(toDepotEntry), depotRules(settings));
@@ -430,7 +441,9 @@ export async function moneySummary(db: Db, month?: string) {
     currency: "CHF",
     budget: summary.budget,
     spent: summary.spent,
-    left: summary.left,
+    left: r2(summary.left - unrecorded),
+    provisional: { count: prov.length, spent: provSpent, share: summary.spent > 0 ? r2(provSpent / summary.spent) : 0 },
+    unrecorded,
     income: summary.income,
     hasData: summary.hasData,
     byCategory: byCategory(monthTx).slice(0, 12).map((c) => ({ category: c.categoryId ? (cats.get(c.categoryId) ?? "Unbekannt") : "Ohne Kategorie", amount: c.amount })),

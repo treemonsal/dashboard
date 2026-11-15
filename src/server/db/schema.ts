@@ -270,6 +270,15 @@ export const accounts = sqliteTable("accounts", {
   // Kennung aus dem Bank-Export (IBAN oder Bankname), damit weitere Uploads demselben Konto zugeordnet werden
   ref: text("ref"),
   sortOrder: integer("sort_order").notNull().default(0),
+  // Ankersaldo: Saldo der jüngsten Auszugszeile (kind "auszug") oder erste eingetippte Angabe (kind "eingabe"). anchorAt nur bei "eingabe".
+  anchorBalance: real("anchor_balance"),
+  anchorDay: text("anchor_day"),
+  anchorAt: text("anchor_at"),
+  anchorKind: text("anchor_kind"),
+  // Zuletzt von Hand eingetippter Kontostand (Tag und Zeitpunkt der Eingabe)
+  enteredBalance: real("entered_balance"),
+  enteredDay: text("entered_day"),
+  enteredAt: text("entered_at"),
   ...timestamps,
 });
 
@@ -306,9 +315,33 @@ export const transactions = sqliteTable(
     internal: integer("internal", { mode: "boolean" }).notNull().default(false),
     // Von Hand (oder per Regel) festgelegt: Mahlzeit ja/nein. null = entscheidet die Schwelle.
     mealOverride: integer("meal_override", { mode: "boolean" }),
+    // Zustand: bestätigt (aus Auszug, Standard) oder vorläufig (Kurzbefehl, von Hand). Herkunft: auszug, kurzbefehl, hand.
+    state: text("state", { enum: ["confirmed", "provisional"] }).notNull().default("confirmed"),
+    origin: text("origin", { enum: ["auszug", "kurzbefehl", "hand"] }).notNull().default("auszug"),
+    // Doppel-Schutz des Kurzbefehls: Händler, Betrag, Konto und 2-Minuten-Fenster als Hash
+    dedupe: text("dedupe"),
     ...timestamps,
   },
-  (t) => [uniqueIndex("transactions_hash_uq").on(t.hash), index("transactions_date_idx").on(t.date), index("transactions_account_idx").on(t.accountId), index("transactions_category_idx").on(t.categoryId)],
+  (t) => [uniqueIndex("transactions_dedupe_uq").on(t.dedupe), uniqueIndex("transactions_hash_uq").on(t.hash), index("transactions_date_idx").on(t.date), index("transactions_account_idx").on(t.accountId), index("transactions_category_idx").on(t.categoryId)],
+);
+
+/* ---------- Eingang per Kurzbefehl: Schlüssel (nur als Hash) und Protokoll für Limits ---------- */
+export const intakeKeys = sqliteTable("intake_keys", {
+  id: text("id").primaryKey(),
+  // SHA-256 des Schlüssels in Hex. Der Schlüssel selbst wird nie gespeichert.
+  hash: text("hash").notNull().unique(),
+  createdAt: text("created_at").notNull().default(now),
+});
+
+export const intakeLog = sqliteTable(
+  "intake_log",
+  {
+    id: text("id").primaryKey(),
+    at: text("at").notNull().default(now),
+    // fail = falscher Schlüssel, auth = Anfrage mit richtigem Schlüssel, ok = Buchung angelegt, dup = Doppel, test = Test aus der App
+    kind: text("kind", { enum: ["fail", "auth", "ok", "dup", "test"] }).notNull(),
+  },
+  (t) => [index("intake_log_at_idx").on(t.at)],
 );
 
 /* ---------- Körper ---------- */

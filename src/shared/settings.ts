@@ -28,6 +28,8 @@ export type Settings = {
   schoolHolidayUntil: string;
   /** Trainings im Körper-Tab: "sport" (ohne Gehen) oder "alle" */
   workoutView: string;
+  /** Konto, dem Buchungen aus dem Kurzbefehl zugeordnet werden (Name) */
+  eingangKonto: string;
 };
-export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "4", salary: "650", investMonthly: "350", investStart: "", investDay: "25", investSymbol: "", investShares: "", investCurrency: "USD", investHoldings: "", mamaName: "", hideHomework: "1", schoolHolidayUntil: "", workoutView: "sport" };
+export const SETTING_DEFAULTS: Settings = { birthDate: "", wakeTime: "06:30", sleepTime: "22:00", workDays: "1,2,3", schoolDays: "4,5", gymGoal: "4", salary: "650", investMonthly: "350", investStart: "", investDay: "25", investSymbol: "", investShares: "", investCurrency: "USD", investHoldings: "", mamaName: "", hideHomework: "1", schoolHolidayUntil: "", workoutView: "sport", eingangKonto: "Revolut" };
 
