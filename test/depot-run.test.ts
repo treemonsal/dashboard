@@ -137,8 +137,8 @@ describe("Mehrere ETF: Quellen und Lauf", () => {
 
 describe("Sparplan im Lauf", () => {
   const ETF = [{ symbol: "VUAA", shares: 2 }, { symbol: "XNAS", shares: 3 }];
-  const setup = async (day = "13") => {
-    await hand("2026-10-14", 1000);
+  const setup = async (day = "13", start = "2026-10-14") => {
+    await hand(start, 1000);
     await env.DB.prepare("INSERT OR REPLACE INTO settings (key,value) VALUES ('investHoldings',?),('investDay',?)").bind(JSON.stringify(ETF), day).run();
   };
   const src = (vuaa: [string, number][], xnas: [string, number][]) => ({ now: NOW, price: price({ IE00BFMXXD54: vuaa, IE00BMFKG444: xnas }), fx: fx([["2026-11-01", 0.9]]) });
@@ -159,7 +159,7 @@ describe("Sparplan im Lauf", () => {
     expect((await rows()).filter((x) => x.date === "2026-11-13")).toHaveLength(1);
   });
   it("Zusatz-Einzahlung von Hand wird gekauft und zählt zum Wert", async () => {
-    await setup("28");
+    await setup("28", "2026-10-29");
     await env.DB.exec("INSERT INTO investment_entries (id,kind,date,amount,note) VALUES ('z1','deposit','2026-11-16',100,'von Hand')");
     await updateDepot(env, src([["2026-11-16", 100]], [["2026-11-16", 50]]));
     expect((await buys()).map((x) => [x.depositKey, x.symbol, x.chf])).toEqual([["d:z1", "VUAA", 50], ["d:z1", "XNAS", 50]]);

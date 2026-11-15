@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { depositsAfter, depotSplit, lotsBySymbol, nextWeekday, parseSplit, planBuys, validBuys, depotHoldings, portfolioProduct, planPortfolioValues, depositedAt, depotState, monthlyCount, planValues, type Close, type DepotConfig, type DepotEntry } from "../src/shared/depot";
+import { monthlyCount as mc, depositsAfter, depotSplit, lotsBySymbol, nextWeekday, parseSplit, planBuys, validBuys, depotHoldings, portfolioProduct, planPortfolioValues, depositedAt, depotState, monthlyCount, planValues, type Close, type DepotConfig, type DepotEntry } from "../src/shared/depot";
 
 const rules = { monthly: 350, day: 25 };
 const val = (date: string, amount: number, estimated = false): DepotEntry => ({ kind: "value", date, amount, estimated });
@@ -28,19 +28,22 @@ describe("Depot: Startbestand und Gewinn", () => {
     expect(v.gain).toBe(-150);
     expect(v.pct).toBe(-5);
   });
-  it("monatliche Einzahlung zählt ab dem Monat nach dem Startbestand, am Stichtag", () => {
-    expect(monthlyCount("2026-11-14", "2026-11-30", 25)).toBe(0);
-    expect(monthlyCount("2026-11-14", "2026-12-24", 25)).toBe(0);
-    expect(monthlyCount("2026-11-14", "2026-12-25", 25)).toBe(1);
-    expect(monthlyCount("2026-11-14", "2027-02-25", 25)).toBe(3);
+  it("monatliche Einzahlung zählt ab dem ersten Stichtag nach dem Startbestand", () => {
+    expect(monthlyCount("2026-11-14", "2026-11-24", 25)).toBe(0);
+    expect(monthlyCount("2026-11-14", "2026-11-30", 25)).toBe(1);
+    expect(monthlyCount("2026-11-14", "2026-12-24", 25)).toBe(1);
+    expect(monthlyCount("2026-11-14", "2026-12-25", 25)).toBe(2);
+    expect(monthlyCount("2026-11-14", "2027-02-25", 25)).toBe(4);
+    // Start nach dem Stichtag: erst der Folgemonat
+    expect(monthlyCount("2026-11-26", "2026-12-24", 25)).toBe(0);
     // Jahreswechsel und kurzer Monat
-    expect(monthlyCount("2026-12-30", "2027-02-28", 31)).toBe(2);
-    expect(depositedAt([val("2026-11-14", 3175)], rules, "2027-01-31")).toBe(3175 + 2 * 350);
+    expect(monthlyCount("2026-12-30", "2027-02-28", 31)).toBe(3);
+    expect(depositedAt([val("2026-11-14", 3175)], rules, "2027-01-31")).toBe(3175 + 3 * 350);
   });
   it("Gewinn rechnet mit den Einzahlungen bis zum Datum des Werts, nicht bis heute", () => {
     const s = depotState([val("2026-11-14", 3000), val("2026-12-26", 3400)], rules);
-    expect(s.deposited).toBe(3350);
-    expect(s.gain).toBe(50);
+    expect(s.deposited).toBe(3700);
+    expect(s.gain).toBe(-300);
   });
   it("Einzahlungen von Hand zählen nur nach dem Startbestand", () => {
     const entries = [val("2026-11-14", 3000), dep("2026-11-10", 999), dep("2026-11-14", 999), dep("2026-11-18", 200), val("2026-11-20", 3300)];
@@ -162,7 +165,7 @@ describe("Mehrere ETF im Depot", () => {
 describe("Sparplan: Käufe aus Einzahlungen", () => {
   const split = depotSplit({});
   const c = (rows: [string, number][]): Close[] => rows.map(([date, close]) => ({ date, close }));
-  const base = [val("2026-11-14", 3000)];
+  const base = [val("2026-11-26", 3000)];
   const buy = (entries: DepotEntry[], today: string, closes: Record<string, Close[]>, have = new Set<string>(), fx = c([["2026-11-01", 0.9]])) =>
     planBuys({ deposits: depositsAfter(entries, rules, today), split, have, closes, fx, today });
 
@@ -250,7 +253,6 @@ describe("Sparplan: Käufe aus Einzahlungen", () => {
   });
 });
 
-import { monthlyCount as mc } from "../src/shared/depot";
 describe("erste Monatsrate im Startmonat", () => {
   it("Start 14.11., Stichtag 25.: Rate am 25.11. zählt", () => {
     expect(mc("2026-11-14", "2026-11-24", 25)).toBe(0);

@@ -2,7 +2,7 @@
 //
 // Regeln:
 // - Der allererste von Hand eingetragene Wert ist der Startbestand: zählt vollständig als einbezahlt, Gewinn 0.
-// - Einbezahlt = Startbestand + monatliche Einzahlung ab dem Monat NACH dem Startbestand (am Stichtag, Standard der 25.)
+// - Einbezahlt = Startbestand + monatliche Einzahlung ab dem ersten Stichtag NACH dem Startbestand (Standard der 25., schon im Startmonat, wenn er nach dem Startwert liegt)
 //   + von Hand nachgetragene Einzahlungen, die nach dem Startbestand liegen.
 // - Gewinn zu einem Wert = Wert minus das, was bis zu dessen Datum einbezahlt war.
 // - Geschätzte Werte (estimated) schreibt der tägliche Lauf fort; sie sind nie Startbestand und nie Basis, ein Handwert gewinnt.
@@ -56,7 +56,7 @@ function monthDate(y: number, m: number, day: number): string {
   return `${y}-${String(m).padStart(2, "0")}-${String(Math.min(day, last)).padStart(2, "0")}`;
 }
 
-/** Anzahl Stichtage der monatlichen Einzahlung in den Monaten nach dem Startmonat bis und mit `date`. */
+/** Anzahl Stichtage der monatlichen Einzahlung ab dem ersten Stichtag nach dem Startwert bis und mit `date`. */
 export function monthlyCount(startDate: string, date: string, day: number): number {
   if (!DATE_RE.test(startDate) || !DATE_RE.test(date)) return 0;
   // Erste Rate: Stichtag im Startmonat, falls er nach dem Startwert liegt, sonst im Folgemonat.

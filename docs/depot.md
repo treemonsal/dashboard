@@ -2,7 +2,7 @@
 
 ## Rechnung (src/shared/depot.ts)
 - Der erste von Hand eingetragene Wert ist der Startbestand: zählt voll als einbezahlt, Gewinn 0.
-- Einbezahlt = Startbestand + monatliche Einzahlung (Standard 350) am Stichtag (Standard 25., einstellbar 1 bis 28) in jedem Monat NACH dem Startmonat + von Hand nachgetragene Einzahlungen, die nach dem Startbestand liegen.
+- Einbezahlt = Startbestand + monatliche Einzahlung (Standard 350) am Stichtag (Standard 25., einstellbar 1 bis 28) ab dem ersten Stichtag NACH dem Startwert (liegt der Stichtag im Startmonat nach dem Startwert, zählt schon diese Rate, z.B. Start 14.11. und Stichtag 25. ergibt die erste Rate am 25.11.; sonst erst der Folgemonat) + von Hand nachgetragene Einzahlungen, die nach dem Startbestand liegen.
 - Gewinn eines Werts = Wert minus Einzahlungen bis zu dessen Datum (nicht bis heute), in Franken und Prozent.
 - Die Einstellung `investStart` wird nicht mehr gerechnet (der Startbestand ist der erste Wert).
 
@@ -10,7 +10,7 @@
 Seit dem Sparplan steigt der Wert mit den Einzahlungen, nicht nur "Einbezahlt". Bestätigt: 350 CHF pro Monat am 25., aufgeteilt 50/50 auf VUAA und XNAS. NVIDIA bleibt gehalten und bewertet, wird nicht mehr gekauft. Zusatz-Einzahlungen von Hand (meist am Monatsende) gehen ebenfalls nach der Aufteilung.
 
 - Einstellung `investSplit` (JSON, Standard `[{"symbol":"VUAA","pct":50},{"symbol":"XNAS","pct":50}]`). Gültig nur mit bekannten Symbolen, je einmal, Summe 100 (zod und `parseSplit` in src/shared/depot.ts). Änderbar im Depot-Blatt als Pillen 100/0 bis 0/100 (VUAA/XNAS). Eine Änderung gilt für künftige Käufe; gespeicherte Käufe bleiben.
-- Zählende Einzahlungen (`depositsAfter`): Monatsrate am Stichtag in jedem Monat nach dem Startmonat und Einzahlungen von Hand, jeweils mit Datum NACH dem letzten Handwert. Was am oder vor dem Datum des letzten Handwerts liegt, steckt schon in dessen Anteilen.
+- Zählende Einzahlungen (`depositsAfter`): Monatsrate am Stichtag ab dem ersten Stichtag nach dem Startwert (Startmonat zählt, wenn der Stichtag nach dem Startwert liegt) und Einzahlungen von Hand, jeweils mit Datum NACH dem letzten Handwert. Was am oder vor dem Datum des letzten Handwerts liegt, steckt schon in dessen Anteilen.
 - Kauf (`planBuys`): Betrag mal Anteil geteilt durch (Kurs EUR mal EUR/CHF) am ersten Kurs am oder nach dem Einzahlungsdatum. Fällt die Einzahlung auf ein Wochenende, wartet der Kauf auf den Montagskurs. Tradegate liefert nur den letzten Kurs: der Tageslauf hält den Kauf fest, sobald der Kurs da ist. Ist der erste verfügbare Kurs später als der erste Werktag (Lauf fiel aus), wird der spätere Kurs genommen und `late` gesetzt (Feiertage kennt die Logik nicht und markieren dann auch). Ohne Kurs oder EUR/CHF entsteht kein Kauf, es wird nichts erfunden; die anderen Symbole laufen weiter.
 - Tabelle `depot_buys` (Migration 0012, additiv): Einzahlungs-Schlüssel (`m:YYYY-MM` für die Monatsrate, `d:<id>` für Einträge von Hand), Einzahlungsdatum, Symbol, Betrag CHF, Anteile, Kurs EUR, EUR/CHF, Kaufdatum, `late`. Eindeutig je Einzahlung und Symbol, ein zweiter Lauf kauft nie doppelt. Käufe werden nie gelöscht.
 - Wert: Anteile = Positionen aus `investHoldings` plus gekaufte Anteile bis zum Kaufdatum. Am Kauftag bleibt der Gewinn gleich (Kauf zum Kurs des Tages, bis auf Rundung auf 6 Stellen).
