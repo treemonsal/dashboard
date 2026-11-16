@@ -11,7 +11,7 @@ Liest jeden Sonntagabend die Noten aus dem KVZ-Portal und trägt Neues über den
 ## Ablauf
 1. Cloud-Browser starten (Werkzeug browser_exec): `start_remote_daemon(profileName="tim-schule", timeout=20)`. Das Profil "tim-schule" hält die Anmeldung (geprüft am 14.11.2026: überlebt einen Neustart).
    - Fehlt die Anmeldung bei Browser Use (Schlüssel weg, z.B. nach neuem Container): `uvx browser-use login --device-code` im Hintergrund starten und Tim Adresse und Code geben. Ohne Tim geht es dann nicht.
-2. `new_tab("https://www.kvz-schule.ch/login/noten")`. Landet man auf dem Anmeldeformular: den Knopf "Login für Lernende, Studierende und Lehrpersonen" anklicken (Anmeldung über das Schulkonto, kein Passwort nötig, solange die Microsoft-Sitzung lebt).
+2. `new_tab("https://www.kvz-schule.ch/login/noten")`. Landet man auf dem Anmeldeformular: den Knopf "Login für Lernende, Studierende und Lehrpersonen" anklicken; reagiert der Knopf nicht, direkt https://www.kvz-schule.ch/login/feoidc öffnen und danach wieder die Notenseite (Anmeldung über das Schulkonto, kein Passwort nötig, solange die Microsoft-Sitzung lebt).
 3. Noten auslesen mit diesem Skript (liefert Zeitraum und pro Fach alle Einträge mit Titel, Gewicht, Wert, Datum):
 
 ```js
@@ -38,7 +38,7 @@ Liest jeden Sonntagabend die Noten aus dem KVZ-Portal und trägt Neues über den
 6. Stundenplan lesen und mit `set_timetable` ersetzen, wenn er sich geändert hat: https://www.kvz-schule.ch/login/stundenplan öffnen (Wochenansicht mit Fach, Zimmer, Lehrperson), jede Lektion als Wochentag (1 bis 7), Beginn, Ende, Fach-Kürzel (Liste in Schritt 5), Zimmer und Lehrperson lesen, mit `get_timetable` vergleichen und nur bei einem Unterschied alle Lektionen auf einmal mit `set_timetable` übergeben (es ersetzt den ganzen Stundenplan, höchstens 80 Einträge; eine leere oder offensichtlich unvollständige Auslese nie übergeben, sondern Tim melden). Das Auslese-Skript ist noch offen: die Struktur der Seite ist nicht bekannt. Schulferien kennt der Stundenplan nicht, die stellt Tim in den Einstellungen ein.
 7. Browser stoppen: `stop_remote_daemon()` (speichert das Profil, spart Kosten).
 8. Kurzbericht an Tim: neue Noten mit Fach und Wert, neuer Gesamtschnitt aus `grade_summary`, Fächer unter 4, und was er in der nächsten Prüfung dafür braucht. Fächer unter `notCounted` (HKB e, Sport) zählen nicht und werden nicht gemeldet, ausser es gibt neue Noten, dann nur als Information. Keine neuen Noten: ein Satz.
-9. Zum Schluss `notify` aufrufen: Titel höchstens 60, Text höchstens 180 Zeichen, der Kurzbericht in einem Satz (z.B. "2 neue Noten, Schnitt 4.6"). Höchstens 10 pro Tag; Antippen öffnet die App bei Ziele. Fehlt das Werkzeug, ist die App noch ohne das Recht `notify` verbunden: Tim muss sie neu verbinden (docs/connector.md).
+9. Nur wenn es neue Noten gibt (Lauf ist täglich Mo bis Fr), zum Schluss `notify` aufrufen: Titel höchstens 60, Text höchstens 180 Zeichen, der Kurzbericht in einem Satz (z.B. "2 neue Noten, Schnitt 4.6"). Höchstens 10 pro Tag; Antippen öffnet die App bei Ziele. Fehlt das Werkzeug, ist die App noch ohne das Recht `notify` verbunden: Tim muss sie neu verbinden (docs/connector.md).
 
 ## Bekannt
 - Das Portal zeigt die Fachnote auf halbe Noten gerundet. Das Dashboard rechnet mit dem genauen Schnitt (fürs Ziel) und zeigt im Fach-Blatt zusätzlich die Zeugnisnote (kaufmännisch auf 0.5 gerundet).
