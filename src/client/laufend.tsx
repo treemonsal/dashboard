@@ -129,6 +129,7 @@ export function QuickAddAction() {
   return (
     <button type="button" className="act press" aria-label="Buchung hinzufügen" onClick={() => sheet.open(<QuickAddSheet />)}>
       <i><Icon n="plus" /></i>
+      <span className="act-l" aria-hidden="true">Buchung</span>
     </button>
   );
 }

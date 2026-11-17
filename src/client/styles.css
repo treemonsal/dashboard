@@ -89,14 +89,14 @@
   .dots i.x { box-shadow: inset 0 0 0 1.5px var(--fg3); }
 
   .gym { display: grid; grid-template-rows: repeat(7, 1fr); grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 6px 0 12px; }
-  .gym i, .gym button { aspect-ratio: 1; border-radius: var(--r-cell); background: var(--dot); position: relative; display: block; }
-  .gym button::before { content: ""; position: absolute; inset: -2px; }
+  .gym i, .gym a, .gym button { aspect-ratio: 1; border-radius: var(--r-cell); background: var(--dot); position: relative; display: block; }
+  .gym a::before, .gym button::before { content: ""; position: absolute; inset: -2px; }
   .gym .g { background: var(--fg); }
   .gym .f { background: none; border: 1.5px solid var(--dot); }
   .gym .m:not(.g) { background: none; border: 1.5px solid var(--fg3); }
   .gym .s.m:not(.g) { border-style: dashed; }
-  .gym button.t { border: 1.5px solid var(--fg); }
-  .gym button.t.g { transform: scale(1.12); }
+  .gym a.t, .gym button.t { border: 1.5px solid var(--fg); }
+  .gym a.t.g, .gym button.t.g { transform: scale(1.12); }
   .wk { display: inline-flex; gap: 3px; margin-right: 8px; vertical-align: middle; }
   .wk i { width: 7px; height: 7px; border-radius: 50%; background: var(--dot); }
   .wk i.g { background: var(--fg); }
@@ -335,7 +335,8 @@
   .money-n .cur { font-size: 0.42em; color: var(--fg2); font-weight: 600; letter-spacing: 0; margin-right: 0.35em; }
   .money-n .ct { font-size: 0.5em; color: var(--fg2); font-weight: 600; letter-spacing: 0; margin-left: 1px; }
   .acts { display: flex; justify-content: center; gap: 4px; padding: 6px 0 4px; }
-  .act { display: grid; place-items: center; color: var(--fg); min-width: 64px; }
+  .act { display: grid; justify-items: center; align-content: start; gap: 6px; color: var(--fg); min-width: 64px; }
+  .act-l { font-size: 12px; line-height: 16px; color: var(--fg2); white-space: nowrap; }
   .act i { width: 56px; height: 56px; border-radius: 50%; background: var(--card2); display: grid; place-items: center; }
   .act svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
   .lrow { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 8px 0; text-align: left; }

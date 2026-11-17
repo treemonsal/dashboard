@@ -6,7 +6,7 @@ import { describeRule } from "../shared/recurrence";
 import { Link } from "./router";
 import { useSheet } from "./sheet";
 import { TaskLine, TrainingSheet } from "./sheets";
-import { CheckMark, Icon, Money, Ring, Meter, PageTitle, nf, hm } from "./ui";
+import { CheckMark, Empty, Icon, Money, Ring, Meter, PageTitle, nf, hm } from "./ui";
 import { useDay } from "./day";
 import { ExamsCard, GymCard, NotenCard, YearCard } from "./cards";
 import { inbox, upcoming as upcomingTasks, tasksToday, useLatest, useMonthMoney } from "./lib";
@@ -224,6 +224,9 @@ export function Aufgaben() {
             {lists[seg].map((t) => (<TaskLine key={t.id} task={t} today={today} />))}
           </div>
         )
+      )}
+      {tasks.isSuccess && seg !== "projekte" && (seg === "demnaechst" ? groups.length === 0 : lists[seg].length === 0) && (
+        <div className="card"><Empty>{seg === "eingang" ? "Eingang leer." : seg === "heute" ? "Nichts für heute." : "Nichts geplant."}</Empty></div>
       )}
       {seg === "demnaechst" && groups.map(([date, list]) => (
         <div key={date} className="card" style={{ paddingTop: 0 }}>

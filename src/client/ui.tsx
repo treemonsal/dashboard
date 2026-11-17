@@ -191,12 +191,13 @@ export function Empty({ children, action }: { children: ReactNode; action?: { la
   );
 }
 
-export function RoundAction({ icon, label, onClick, href }: { icon: string; label: string; onClick?: () => void; href?: string }) {
+export function RoundAction({ icon, label, short, onClick, href }: { icon: string; label: string; short?: string; onClick?: () => void; href?: string }) {
   const inner = (
     <>
       <i>
         <Icon n={icon} />
       </i>
+      {short && <span className="act-l" aria-hidden="true">{short}</span>}
     </>
   );
   return href ? (

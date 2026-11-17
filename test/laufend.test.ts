@@ -277,7 +277,8 @@ describe("POST /eingang/buchung", () => {
 
   it("nach 20 Fehlversuchen pro Stunde gesperrt, auch für den richtigen Schlüssel; danach wieder frei", async () => {
     await clearLog();
-    const base = (t0 += 10_000_000);
+    // GET /api/eingang rechnet mit der echten Uhr: die Fehlversuche müssen in der letzten Stunde liegen.
+    const base = (t0 = Math.max(t0 + 10_000_000, Date.now() - 60_000));
     const n = await countProv();
     for (let i = 0; i < 20; i++) expect((await post({ merchant: "X", amount: 5 }, "B".repeat(43), base + i * 100)).status).toBe(401);
     const locked = await post({ merchant: "Gesperrt", amount: 5 }, key, base + 3000);
