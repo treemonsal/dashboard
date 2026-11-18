@@ -157,6 +157,7 @@ export function Heute() {
 
 /* ---------- Aufgaben ---------- */
 type Seg = "eingang" | "heute" | "demnaechst" | "projekte";
+const EMPTY_TEXT = { eingang: "Eingang leer.", heute: "Nichts für heute.", demnaechst: "Nichts geplant." } as const;
 
 export function Aufgaben() {
   const today = useToday();
@@ -225,8 +226,8 @@ export function Aufgaben() {
           </div>
         )
       )}
-      {tasks.isSuccess && seg !== "projekte" && (seg === "demnaechst" ? groups.length === 0 : lists[seg].length === 0) && (
-        <div className="card"><Empty>{seg === "eingang" ? "Eingang leer." : seg === "heute" ? "Nichts für heute." : "Nichts geplant."}</Empty></div>
+      {tasks.isSuccess && seg !== "projekte" && lists[seg].length === 0 && (
+        <div className="card"><Empty>{EMPTY_TEXT[seg]}</Empty></div>
       )}
       {seg === "demnaechst" && groups.map(([date, list]) => (
         <div key={date} className="card" style={{ paddingTop: 0 }}>

@@ -6,7 +6,7 @@ import { copy } from "./fitbit-setup";
 import { Link } from "./router";
 import { useSheet } from "./sheet";
 import { notify } from "./toast";
-import { ConfirmDelete, Icon, Money, nf } from "./ui";
+import { ActFace, ConfirmDelete, Icon, Money, nf } from "./ui";
 import { useAccounts, useAllTransactions, useCategories, useSetSetting, useSettings, useToday } from "./queries";
 import { saldoAbgleich, type SaldoErgebnis } from "../shared/saldo";
 import { merchantOf } from "../shared/tiefe";
@@ -128,8 +128,7 @@ export function QuickAddAction() {
   const sheet = useSheet();
   return (
     <button type="button" className="act press" aria-label="Buchung hinzufügen" onClick={() => sheet.open(<QuickAddSheet />)}>
-      <i><Icon n="plus" /></i>
-      <span className="act-l" aria-hidden="true">Buchung</span>
+      <ActFace icon="plus" text="Buchung" />
     </button>
   );
 }

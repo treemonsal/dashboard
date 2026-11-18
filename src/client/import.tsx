@@ -5,7 +5,7 @@ import { api, type ImportFileIn } from "./api";
 import { dayCompact } from "../shared/dates";
 import type { ImportFilePreview, ImportPreview, ImportResult } from "../shared/schemas";
 import { useSheet } from "./sheet";
-import { Icon, Money } from "./ui";
+import { ActFace, Money } from "./ui";
 import { notify } from "./toast";
 import { pdfReadError } from "./pdf-errors";
 
@@ -63,10 +63,7 @@ export function UploadAction() {
   }
   return (
     <label className="act press" style={{ cursor: "pointer", position: "relative" }}>
-      <i>
-        <Icon n="upload" />
-      </i>
-      <span className="act-l" aria-hidden="true">Import</span>
+      <ActFace icon="upload" text="Import" />
       <input ref={input} type="file" multiple accept=".csv,.txt,.pdf,text/csv,text/plain,application/pdf,application/vnd.ms-excel" onChange={pick} aria-label="Bank-Export hochladen"
         style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }} />
     </label>

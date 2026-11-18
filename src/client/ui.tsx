@@ -191,15 +191,20 @@ export function Empty({ children, action }: { children: ReactNode; action?: { la
   );
 }
 
-export function RoundAction({ icon, label, short, onClick, href }: { icon: string; label: string; short?: string; onClick?: () => void; href?: string }) {
-  const inner = (
+/** Gesicht einer runden Aktion: Kreis mit Symbol, kurzer Name darunter. */
+export function ActFace({ icon, text }: { icon: string; text: string }) {
+  return (
     <>
       <i>
         <Icon n={icon} />
       </i>
-      {short && <span className="act-l" aria-hidden="true">{short}</span>}
+      <span className="act-l" aria-hidden="true">{text}</span>
     </>
   );
+}
+
+export function RoundAction({ icon, text, label = text, onClick, href }: { icon: string; text: string; label?: string; onClick?: () => void; href?: string }) {
+  const inner = <ActFace icon={icon} text={text} />;
   return href ? (
     <Link href={href} className="act press" aria-label={label}>
       {inner}

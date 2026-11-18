@@ -54,9 +54,9 @@ export function Geld() {
       <div className="acts">
         <UploadAction />
         <QuickAddAction />
-        <RoundAction icon="chart" label="Analyse" short="Analyse" href={`/geld/analyse/${month}`} />
-        <RoundAction icon="coin" label="Portfolio" short="Portfolio" href="/geld/depot" />
-        <RoundAction icon="fork" label="Offen von Mama" short="Mama" href="/geld/mama" />
+        <RoundAction icon="chart" text="Analyse" href={`/geld/analyse/${month}`} />
+        <RoundAction icon="coin" text="Portfolio" href="/geld/depot" />
+        <RoundAction icon="fork" text="Mama" label="Offen von Mama" href="/geld/mama" />
       </div>
 
       <div className="card">
